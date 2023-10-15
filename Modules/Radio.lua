@@ -1,11 +1,8 @@
-
+local radio = require("Modules/radio")
     
-    
-Radio = {}
+radio = {}
 
-
-function Radio:newRadio()
-
+function radio:newRadio()
     local r = {}
 
     r.path = "base\\gameplay\\devices\\home_appliances\\radio_sets\\radio_1.ent"
@@ -16,7 +13,7 @@ function Radio:newRadio()
     
 end
 
-function Radio:spawn()
+function radio:spawn()
     print("Radio Spawn")
     local transform = Game.GetPlayer():GetWorldTransform()
     transform:SetPosition(Vector4.new(transform.Position:GetX(), (transform.Position:GetY() - 1), transform.Position:GetZ()))
@@ -25,14 +22,14 @@ function Radio:spawn()
     self.spawned = true
 end
 
-function Radio:fadeout()
+function radio:fadeout()
     if Game.FindEntityByID(self.entID) ~= nil then
         self.ent = Game.FindEntityByID(self.entID):GetEntity()
         self.spawned = false
     end
 end
 
-function Radio:despawn()
+function radio:despawn()
     print("Radio Despawn")
     if Game.FindEntityByID(self.entID) ~= nil then
         Game.FindEntityByID(self.entID):GetEntity():Destroy()
@@ -40,4 +37,4 @@ function Radio:despawn()
     end
 end
 
-return Radio:newRadio()
+return radio:newRadio()

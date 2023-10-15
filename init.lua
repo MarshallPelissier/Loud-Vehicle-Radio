@@ -1,10 +1,48 @@
 local LoudVehicleRadio = { version = "0.0.0" }
 local Cron = require("Modules/Cron")
-local Radio = require("Modules/Radio")
+-- local radio = require("Modules.radio")
 
-local isInVehicle = false
+StationList = {
+    "Gameplay-Devices-Radio-RadioStationAggroIndie",
+    "Gameplay-Devices-Radio-RadioStationElectroIndie",
+    "Gameplay-Devices-Radio-RadioStationHipHop",
+    "Gameplay-Devices-Radio-RadioStationAggroTechno",
+    "Gameplay-Devices-Radio-RadioStationDownTempo",
+    "Gameplay-Devices-Radio-RadioStationAttRock",
+    "Gameplay-Devices-Radio-RadioStationPop",
+    "Gameplay-Devices-Radio-RadioStationLatino",
+    "Gameplay-Devices-Radio-RadioStationMetal",
+    "Gameplay-Devices-Radio-RadioStationMinimalTechno",
+    "Gameplay-Devices-Radio-RadioStationJazz",
+    "Gameplay-Devices-Radio-RadioStationGrowlFm",
+    "Gameplay-Devices-Radio-RadioStationDarkStar",
+    "Gameplay-Devices-Radio-RadioStationImpulseFM",
+}
 
-local currentRadioStation = ""
+-- Return the first index with the given value (or nil if not found).
+function indexOf(array, value)
+    for i, v in ipairs(array) do
+        if v == value then
+            return i
+        end
+    end
+    return nil
+end
+
+Vehicle = {
+    base = nil,
+    station = nil
+}
+
+Radio = {
+    path = "base\\gameplay\\devices\\home_appliances\\radio_sets\\radio_1.ent",
+    entID = nil,
+    entity = nil,
+    spawned = false,
+    stationID = ""
+}
+
+local timer = nil
 
 LoudVehicleRadio = {}
 
@@ -12,22 +50,7 @@ function LoudVehicleRadio:New()
 
     registerForEvent("onInit", function()
 
-        -- Cron.Every(0.2, function()
-
-        --     local isInVehicleNext = IsInVehicle() and not IsEnteringVehicle() and not IsExitingVehicle()
-
-        --     if IsEnteringVehicle() then
-        --         OnVehicleEntering()
-        --     elseif IsExitingVehicle() then
-        --         OnVehicleExiting()
-        --     elseif isInVehicleNext == true and isInVehicle == false then
-        --         OnVehicleEntered()
-        --     elseif isInVehicleNext == false and isInVehicle == true then
-        --         OnVehicleExited()
-        --     end
-
-        --     isInVehicle = isInVehicleNext
-        -- end)
+        GetVehicleData()
 
         -- Fires when execting
         Observe('hudCarController', 'OnMountingEvent', function()
@@ -40,78 +63,78 @@ function LoudVehicleRadio:New()
         
     end)
     
-    -- registerForEvent("onUpdate", function(delta)
-    --     Cron.Update(delta)
-    -- end)
+    registerForEvent("onUpdate", function(delta)
+        Cron.Update(delta)
+    end)
+
+    timer = Cron.Every(.1, SetRadio)
 
     return {
       version = LoudVehicleRadio.version
     }
+
 end
 
-function IsEnteringVehicle()
-    return IsInVehicle() and Game.GetWorkspotSystem():GetExtendedInfo(Game.GetPlayer()).entering
-end
-function IsExitingVehicle()
-    return IsInVehicle() and Game.GetWorkspotSystem():GetExtendedInfo(Game.GetPlayer()).exiting
-end
-
-function IsInVehicle()
-    local player = Game.GetPlayer()
-    return player and Game.GetWorkspotSystem():IsActorInWorkspot(player)
-            and Game.GetWorkspotSystem():GetExtendedInfo(player).isActive
-            and HasMountedVehicle()
-            and IsPlayerDriver()
+function GetVehicleData()
+    Vehicle.base = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
+    Vehicle.base:ToggleRadioReceiver(true)
+    Vehicle.station = Vehicle.base:GetRadioReceiverStationName().value
 end
 
-function HasMountedVehicle()
-    return not not Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-end
-
-function IsPlayerDriver()
-    local vehicle = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-    if vehicle then
-        return vehicle:IsPlayerDriver()
-    end
-end
-
-function GetMountedVehicleRecord()
-    local vehicle = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-    if vehicle then
-        return vehicle:GetRecord()
-    end
-end
-
-function IsPlayerDriver()
-    local vehicle = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-    if vehicle then
-        return vehicle:IsPlayerDriver()
-    end
-end
-
-function GetRadioStation()
-    local vehicle = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-    if vehicle then
-        return vehicle:GetRadioRecieverStationName()
-    end
+function UpdateVehicleStation()
+    Vehicle.station = Vehicle.base:GetRadioReceiverStationName().value
 end
 
 function OnVehicleEntered()
     print("Entered Vehicle")
-    Radio:despawn()
-end
-
-function OnVehicleEntering()
-
-end
-
-function OnVehicleExiting()
-
+    Despawn()
+    GetVehicleData()
+    Cron.Pause(timer)
 end
 
 function OnVehicleExited()
     print("Exited Vehicle")
-    Radio:spawn()
+    Spawn()
+    Cron.Resume(timer)
+end
+
+function Spawn()
+    print("Radio Spawn test")
+    local transform = Vehicle.base:GetWorldTransform()
+    local rot = EulerAngles.new(0,90,0)
+    transform:SetPosition(Vector4.new(transform.Position:GetX(), (transform.Position:GetY()), transform.Position:GetZ() - 0.1))
+    transform:SetOrientation(GetSingleton('EulerAngles').ToQuat(rot))
+    Radio.entID = exEntitySpawner.Spawn(Radio.path, transform)
+end
+
+function Fadeout()
+    if Game.FindEntityByID(Radio.entID) ~= nil then
+        Radio.entity = Game.FindEntityByID(Radio.entID):GetEntity()
+        Radio.spawned = false
+    end
+end
+
+function Despawn()
+    print("Radio Despawn")
+    if Game.FindEntityByID(Radio.entID) ~= nil then
+        Game.FindEntityByID(Radio.entID):GetEntity():Destroy()
+        Radio.spawned = false
+    end
+end
+
+function SetRadio()
+    print("SetRadio")
+    if Radio.entID == nil then
+        Cron.Pause(timer)
+    end
+    if Game.FindEntityByID(Radio.entID) ~= nil then
+        Radio.entity = Game.FindEntityByID(Radio.entID)
+        UpdateVehicleStation()
+        Radio.entity:GetDevicePS():SetActiveStationIndex(indexOf(StationList, Vehicle.station) - 1)
+        Radio.entity:PlayGivenStation()
+        Radio.spawned = true
+        Cron.Pause(timer)
+    end
 end
 
 return LoudVehicleRadio:New()
