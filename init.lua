@@ -1,6 +1,5 @@
 local LoudVehicleRadio = { version = "0.0.0" }
 local Cron = require("Modules/Cron")
--- local radio = require("Modules.radio")
 
 StationList = {
     "Gameplay-Devices-Radio-RadioStationAggroIndie",
@@ -29,30 +28,35 @@ function indexOf(array, value)
     return nil
 end
 
-Vehicle = {
-    base = nil,
-    station = nil
-}
-
 Radio = {
     path = "base\\gameplay\\devices\\home_appliances\\radio_sets\\radio_1.ent",
     entID = nil,
     entity = nil,
-    spawned = false,
-    stationID = ""
+    station = ""
+}
+
+Vehicle = {
+    base = nil,
+    record = nil,
+    station = nil,
+    lastLoc = nil,
+    mounted = false
+}
+
+Checks = {
+    count = 0,
+    spawned = false
 }
 
 local timer = nil
+local rot = EulerAngles.new(0,-90,0)
 
 LoudVehicleRadio = {}
 
 function LoudVehicleRadio:New()
 
     registerForEvent("onInit", function()
-
-        GetVehicleData()
-
-        -- Fires when execting
+        
         Observe('hudCarController', 'OnMountingEvent', function()
             OnVehicleEntered()
         end)
@@ -60,14 +64,17 @@ function LoudVehicleRadio:New()
         Observe('hudCarController', 'OnUnmountingEvent', function()
             OnVehicleExited()
         end)
-        
+
+        if HasMountedVehicle() then
+            GetVehicleData()
+        end
     end)
     
     registerForEvent("onUpdate", function(delta)
         Cron.Update(delta)
     end)
 
-    timer = Cron.Every(.1, SetRadio)
+    timer = Cron.Every(.1, Update)
 
     return {
       version = LoudVehicleRadio.version
@@ -75,65 +82,133 @@ function LoudVehicleRadio:New()
 
 end
 
-function GetVehicleData()
-    Vehicle.base = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-    Vehicle.base:ToggleRadioReceiver(true)
-    Vehicle.station = Vehicle.base:GetRadioReceiverStationName().value
-end
+function Update()
+    if Vehicle.base ~= nil then
+        if Radio.entity == nil then
+            if Checks.spawned then
+                SetRadio()
+            else
+                Spawn()
+            end
+        else
+            if StationChanged() then
+                Vehicle.station = GetVehicleStation()
+                SetRadio()
+            end
 
-function UpdateVehicleStation()
-    Vehicle.station = Vehicle.base:GetRadioReceiverStationName().value
-end
+            local pos = Vehicle.base:GetWorldTransform().Position
 
-function OnVehicleEntered()
-    print("Entered Vehicle")
-    Despawn()
-    GetVehicleData()
-    Cron.Pause(timer)
-end
+            if VectorCompare(pos, Vehicle.lastLoc) then
+                if Vehicle.mounted == false then
+                    Checks.count = Checks.count + 1
+                end
+            else
+                Game.GetTeleportationFacility():Teleport(Radio.entity, PositionOffset(pos), rot)
+                Vehicle.lastLoc = pos
+                Checks.count = 0
+            end
+        end
+    else
+        Cron.Pause(timer)
+    end
 
-function OnVehicleExited()
-    print("Exited Vehicle")
-    Spawn()
-    Cron.Resume(timer)
-end
-
-function Spawn()
-    print("Radio Spawn test")
-    local transform = Vehicle.base:GetWorldTransform()
-    local rot = EulerAngles.new(0,90,0)
-    transform:SetPosition(Vector4.new(transform.Position:GetX(), (transform.Position:GetY()), transform.Position:GetZ() - 0.1))
-    transform:SetOrientation(GetSingleton('EulerAngles').ToQuat(rot))
-    Radio.entID = exEntitySpawner.Spawn(Radio.path, transform)
-end
-
-function Fadeout()
-    if Game.FindEntityByID(Radio.entID) ~= nil then
-        Radio.entity = Game.FindEntityByID(Radio.entID):GetEntity()
-        Radio.spawned = false
+    if Radio.entID ~= nil and Checks.count > 4 then
+        Cron.Pause(timer)
+        Checks.count = 0
     end
 end
 
+function GetVehicleData()
+    Vehicle.base = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
+    Vehicle.base:ToggleRadioReceiver(true)
+    Vehicle.record = GetMountedVehicleRecord()
+    Vehicle.station = GetVehicleStation()
+end
+
+function GetVehicleStation()
+    return indexOf(StationList, Vehicle.base:GetRadioReceiverStationName().value) - 1
+end
+
+function StationChanged()
+    local station = GetVehicleStation()
+    return Vehicle.station == station
+end
+
+function VectorCompare(vector1, vector2)
+    if vector1 == nil then
+        return false
+    end
+
+    if vector2 == nil then
+        return false
+    end
+
+    if vector1:GetX() == vector2:GetX() and vector1:GetY() == vector2:GetY() and vector1:GetZ() == vector2:GetZ() then
+        return true
+    end
+
+    return false
+end
+
+function PositionOffset(position)
+    return Vector4.new(position:GetX(), (position:GetY()), position:GetZ() - 0.5)
+end
+
+function HasMountedVehicle()
+    return not not Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
+end
+
+function IsPlayerDriver()
+    local veh = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
+    if veh then
+        return veh:IsPlayerDriver()
+    end
+end
+
+function GetMountedVehicleRecord()
+    local veh = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
+    if veh then
+        return veh:GetRecordID()
+    end
+end
+
+function OnVehicleEntered()
+    Vehicle.mounted = true
+    Checks.count = 0
+    if Vehicle.record ~= GetMountedVehicleRecord() then
+        GetVehicleData()
+        Despawn()
+    end
+    Cron.Resume(timer)
+end
+
+function OnVehicleExited()
+    Vehicle.mounted = false
+end
+
+function Spawn()
+    local transform = Vehicle.base:GetWorldTransform()
+    transform:SetPosition(PositionOffset(transform.Position))
+    transform:SetOrientation(GetSingleton('EulerAngles').ToQuat(rot))
+    Radio.entID = exEntitySpawner.Spawn(Radio.path, transform)
+    Checks.spawned = true
+end
+
 function Despawn()
-    print("Radio Despawn")
     if Game.FindEntityByID(Radio.entID) ~= nil then
         Game.FindEntityByID(Radio.entID):GetEntity():Destroy()
-        Radio.spawned = false
+        Checks.spawned = false
+        Radio.entID = nil
+        Radio.entity = nil
+        Radio.station = ""
     end
 end
 
 function SetRadio()
-    print("SetRadio")
-    if Radio.entID == nil then
-        Cron.Pause(timer)
-    end
     if Game.FindEntityByID(Radio.entID) ~= nil then
         Radio.entity = Game.FindEntityByID(Radio.entID)
-        UpdateVehicleStation()
-        Radio.entity:GetDevicePS():SetActiveStationIndex(indexOf(StationList, Vehicle.station) - 1)
+        Radio.entity:GetDevicePS():SetActiveStationIndex(Vehicle.station)
         Radio.entity:PlayGivenStation()
-        Radio.spawned = true
-        Cron.Pause(timer)
     end
 end
 
