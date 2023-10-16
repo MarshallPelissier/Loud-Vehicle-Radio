@@ -1,7 +1,7 @@
 local LoudVehicleRadio = { version = "0.0.0" }
 local Cron = require("Modules/Cron")
 
-StationList = {
+VehicleStationList = {
     "Gameplay-Devices-Radio-RadioStationAggroIndie",
     "Gameplay-Devices-Radio-RadioStationElectroIndie",
     "Gameplay-Devices-Radio-RadioStationHipHop",
@@ -18,21 +18,27 @@ StationList = {
     "Gameplay-Devices-Radio-RadioStationImpulseFM",
 }
 
--- Return the first index with the given value (or nil if not found).
-function indexOf(array, value)
-    for i, v in ipairs(array) do
-        if v == value then
-            return i
-        end
-    end
-    return nil
-end
+SpeakerStationList = {
+    "radio_station_02_aggro_ind",
+    "radio_station_03_elec_ind",
+    "radio_station_04_hiphop",
+    "radio_station_07_aggro_techno",
+    "radio_station_09_downtempo",
+    "radio_station_01_att_rock",
+    "radio_station_05_pop",
+    "radio_station_10_latino",
+    "radio_station_11_metal",
+    "radio_station_06_minim_techno",
+    "radio_station_08_jazz",
+    "radio_station_12_growl_fm",
+    "radio_station_13_dark_star",
+    "radio_station_14_impulse_fm",
+}
 
-Radio = {
-    path = "base\\gameplay\\devices\\home_appliances\\radio_sets\\radio_1.ent",
+Speaker = {
+    path = "base\\gameplay\\devices\\home_appliances\\radio_sets\\speaker_virtual.ent",
     entID = nil,
-    entity = nil,
-    station = ""
+    entity = nil
 }
 
 Vehicle = {
@@ -49,14 +55,14 @@ Checks = {
 }
 
 local timer = nil
-local rot = EulerAngles.new(0,-90,0)
+local rot = nil
 
 LoudVehicleRadio = {}
 
 function LoudVehicleRadio:New()
-
     registerForEvent("onInit", function()
         
+        rot = EulerAngles.new(0,0,0)
         Observe('hudCarController', 'OnMountingEvent', function()
             OnVehicleEntered()
         end)
@@ -79,21 +85,20 @@ function LoudVehicleRadio:New()
     return {
       version = LoudVehicleRadio.version
     }
-
 end
 
 function Update()
     if Vehicle.base ~= nil then
-        if Radio.entity == nil then
+        if Speaker.entity == nil then
             if Checks.spawned then
-                SetRadio()
+                SetSpeaker()
             else
                 Spawn()
             end
         else
             if StationChanged() then
                 Vehicle.station = GetVehicleStation()
-                SetRadio()
+                SetSpeaker()
             end
 
             local pos = Vehicle.base:GetWorldTransform().Position
@@ -103,7 +108,7 @@ function Update()
                     Checks.count = Checks.count + 1
                 end
             else
-                Game.GetTeleportationFacility():Teleport(Radio.entity, PositionOffset(pos), rot)
+                Game.GetTeleportationFacility():Teleport(Speaker.entity, VectorFromPosition(pos) , rot)
                 Vehicle.lastLoc = pos
                 Checks.count = 0
             end
@@ -112,7 +117,7 @@ function Update()
         Cron.Pause(timer)
     end
 
-    if Radio.entID ~= nil and Checks.count > 4 then
+    if Speaker.entID ~= nil and Checks.count > 4 then
         Cron.Pause(timer)
         Checks.count = 0
     end
@@ -126,12 +131,16 @@ function GetVehicleData()
 end
 
 function GetVehicleStation()
-    return indexOf(StationList, Vehicle.base:GetRadioReceiverStationName().value) - 1
+    return indexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value)
 end
 
 function StationChanged()
     local station = GetVehicleStation()
-    return Vehicle.station == station
+    return Vehicle.station ~= station
+end
+
+function VectorFromPosition(pos)
+    return Vector4.new(pos:GetX(),pos:GetY(),pos:GetZ())
 end
 
 function VectorCompare(vector1, vector2)
@@ -150,19 +159,8 @@ function VectorCompare(vector1, vector2)
     return false
 end
 
-function PositionOffset(position)
-    return Vector4.new(position:GetX(), (position:GetY()), position:GetZ() - 0.5)
-end
-
 function HasMountedVehicle()
     return not not Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-end
-
-function IsPlayerDriver()
-    local veh = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-    if veh then
-        return veh:IsPlayerDriver()
-    end
 end
 
 function GetMountedVehicleRecord()
@@ -188,27 +186,33 @@ end
 
 function Spawn()
     local transform = Vehicle.base:GetWorldTransform()
-    transform:SetPosition(PositionOffset(transform.Position))
-    transform:SetOrientation(GetSingleton('EulerAngles').ToQuat(rot))
-    Radio.entID = exEntitySpawner.Spawn(Radio.path, transform)
+    Speaker.entID = exEntitySpawner.Spawn(Speaker.path, transform)
     Checks.spawned = true
 end
 
 function Despawn()
-    if Game.FindEntityByID(Radio.entID) ~= nil then
-        Game.FindEntityByID(Radio.entID):GetEntity():Destroy()
+    if Game.FindEntityByID(Speaker.entID) ~= nil then
+        Game.FindEntityByID(Speaker.entID):GetEntity():Destroy()
         Checks.spawned = false
-        Radio.entID = nil
-        Radio.entity = nil
-        Radio.station = ""
+        Speaker.entID = nil
+        Speaker.entity = nil
     end
 end
 
-function SetRadio()
-    if Game.FindEntityByID(Radio.entID) ~= nil then
-        Radio.entity = Game.FindEntityByID(Radio.entID)
-        Radio.entity:GetDevicePS():SetActiveStationIndex(Vehicle.station)
-        Radio.entity:PlayGivenStation()
+function SetSpeaker()
+    if Game.FindEntityByID(Speaker.entID) ~= nil then
+        Speaker.entity = Game.FindEntityByID(Speaker.entID)
+        Speaker.entity:GetDevicePS():SetCurrentStation(SpeakerStationList[Vehicle.station])
+        Speaker.entity:PlayAllSounds()
+    end
+end
+
+-- Return the first index with the given value (or nil if not found).
+function indexOf(array, value)
+    for i, v in ipairs(array) do
+        if v == value then
+            return i
+        end
     end
 end
 
