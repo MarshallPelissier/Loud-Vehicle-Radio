@@ -1,4 +1,4 @@
-local LoudVehicleRadio = { version = "0.0.0" }
+local LoudVehicleRadio = { version = "1.0.0" }
 local Cron = require("Modules/Cron")
 
 VehicleStationList = {
@@ -96,13 +96,14 @@ function Update()
                 Spawn()
             end
         else
+            -- Check if vehicle radio station has changed
             if StationChanged() then
                 Vehicle.station = GetVehicleStation()
                 SetSpeaker()
             end
 
+            -- moves speaker with vehicle until it comes to a full stop
             local pos = Vehicle.base:GetWorldTransform().Position
-
             if VectorCompare(pos, Vehicle.lastLoc) then
                 if Vehicle.mounted == false then
                     Checks.count = Checks.count + 1
@@ -117,9 +118,35 @@ function Update()
         Cron.Pause(timer)
     end
 
+    -- stops the timer if the car has been exited, the car has come to a stop, and the speaker is already spawned
     if Speaker.entID ~= nil and Checks.count > 4 then
         Cron.Pause(timer)
         Checks.count = 0
+    end
+end
+
+function OnVehicleEntered()
+    Vehicle.mounted = true
+    Checks.count = 0
+    if Vehicle.record ~= GetMountedVehicleRecord() then
+        GetVehicleData()
+        Despawn()
+    end
+    Cron.Resume(timer)
+end
+
+function OnVehicleExited()
+    Vehicle.mounted = false
+end
+
+function HasMountedVehicle()
+    return not not Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
+end
+
+function GetMountedVehicleRecord()
+    local veh = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
+    if veh then
+        return veh:GetRecordID()
     end
 end
 
@@ -137,6 +164,29 @@ end
 function StationChanged()
     local station = GetVehicleStation()
     return Vehicle.station ~= station
+end
+
+function SetSpeaker()
+    if Game.FindEntityByID(Speaker.entID) ~= nil then
+        Speaker.entity = Game.FindEntityByID(Speaker.entID)
+        Speaker.entity:GetDevicePS():SetCurrentStation(SpeakerStationList[Vehicle.station])
+        Speaker.entity:PlayAllSounds()
+    end
+end
+
+function Spawn()
+    local transform = Vehicle.base:GetWorldTransform()
+    Speaker.entID = exEntitySpawner.Spawn(Speaker.path, transform)
+    Checks.spawned = true
+end
+
+function Despawn()
+    if Game.FindEntityByID(Speaker.entID) ~= nil then
+        Game.FindEntityByID(Speaker.entID):GetEntity():Destroy()
+        Checks.spawned = false
+        Speaker.entID = nil
+        Speaker.entity = nil
+    end
 end
 
 function VectorFromPosition(pos)
@@ -159,55 +209,6 @@ function VectorCompare(vector1, vector2)
     return false
 end
 
-function HasMountedVehicle()
-    return not not Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-end
-
-function GetMountedVehicleRecord()
-    local veh = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
-    if veh then
-        return veh:GetRecordID()
-    end
-end
-
-function OnVehicleEntered()
-    Vehicle.mounted = true
-    Checks.count = 0
-    if Vehicle.record ~= GetMountedVehicleRecord() then
-        GetVehicleData()
-        Despawn()
-    end
-    Cron.Resume(timer)
-end
-
-function OnVehicleExited()
-    Vehicle.mounted = false
-end
-
-function Spawn()
-    local transform = Vehicle.base:GetWorldTransform()
-    Speaker.entID = exEntitySpawner.Spawn(Speaker.path, transform)
-    Checks.spawned = true
-end
-
-function Despawn()
-    if Game.FindEntityByID(Speaker.entID) ~= nil then
-        Game.FindEntityByID(Speaker.entID):GetEntity():Destroy()
-        Checks.spawned = false
-        Speaker.entID = nil
-        Speaker.entity = nil
-    end
-end
-
-function SetSpeaker()
-    if Game.FindEntityByID(Speaker.entID) ~= nil then
-        Speaker.entity = Game.FindEntityByID(Speaker.entID)
-        Speaker.entity:GetDevicePS():SetCurrentStation(SpeakerStationList[Vehicle.station])
-        Speaker.entity:PlayAllSounds()
-    end
-end
-
--- Return the first index with the given value (or nil if not found).
 function indexOf(array, value)
     for i, v in ipairs(array) do
         if v == value then

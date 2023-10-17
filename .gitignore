@@ -1,2 +1,5 @@
 bin/
+builds/
 LoudVehicleRadio.zip
+LoudVehicleRadio.log
+db.sqlite3
