@@ -38,7 +38,8 @@ SpeakerStationList = {
 Speaker = {
     path = "base\\gameplay\\devices\\home_appliances\\radio_sets\\speaker_virtual.ent",
     entID = nil,
-    entity = nil
+    entity = nil,
+    active = false
 }
 
 Vehicle = {
@@ -61,8 +62,7 @@ LoudVehicleRadio = {}
 
 function LoudVehicleRadio:New()
     registerForEvent("onInit", function()
-        
-        rot = EulerAngles.new(0,0,0)
+        rot = EulerAngles.new(0,90,0)
         Observe('hudCarController', 'OnMountingEvent', function()
             OnVehicleEntered()
         end)
@@ -71,13 +71,22 @@ function LoudVehicleRadio:New()
             OnVehicleExited()
         end)
 
+        Observe('LoadGameMenuGameController', 'OnUninitialize', function()
+            Cleanup()
+        end)
+        
         if HasMountedVehicle() then
             GetVehicleData()
         end
     end)
-    
+
     registerForEvent("onUpdate", function(delta)
         Cron.Update(delta)
+    end)
+
+
+    registerForEvent("onShutdown", function(delta)
+        Cleanup()
     end)
 
     timer = Cron.Every(.1, Update)
@@ -85,6 +94,18 @@ function LoudVehicleRadio:New()
     return {
       version = LoudVehicleRadio.version
     }
+end
+
+function Cleanup()
+    Despawn()
+
+    Vehicle.base = nil
+    Vehicle.record = nil
+    Vehicle.station = nil
+    Vehicle.lastLoc = nil
+    Vehicle.mounted = false
+
+    Checks.count = 0
 end
 
 function Update()
@@ -99,6 +120,7 @@ function Update()
             -- Check if vehicle radio station has changed
             if StationChanged() then
                 Vehicle.station = GetVehicleStation()
+                Speaker.active = false
                 SetSpeaker()
             end
 
@@ -139,6 +161,13 @@ function OnVehicleExited()
     Vehicle.mounted = false
 end
 
+-- function PrintPosition(pos)
+--     local x = pos:GetX()
+--     local y = pos:GetY()
+--     local z = pos:GetZ()
+--     print("X: " .. x .. " - Y: " .. y .. " - Z: " .. z)
+-- end
+
 function HasMountedVehicle()
     return not not Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
 end
@@ -158,10 +187,13 @@ function GetVehicleData()
 end
 
 function GetVehicleStation()
-    return indexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value)
+    return IndexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value)
 end
 
 function StationChanged()
+    if not Vehicle.base:IsVehicle() then
+        GetVehicleData()
+    end
     local station = GetVehicleStation()
     return Vehicle.station ~= station
 end
@@ -170,7 +202,10 @@ function SetSpeaker()
     if Game.FindEntityByID(Speaker.entID) ~= nil then
         Speaker.entity = Game.FindEntityByID(Speaker.entID)
         Speaker.entity:GetDevicePS():SetCurrentStation(SpeakerStationList[Vehicle.station])
-        Speaker.entity:PlayAllSounds()
+        if not Speaker.active then
+            Speaker.entity:TurnOnDevice()
+            Speaker.active = true
+        end
     end
 end
 
@@ -186,6 +221,7 @@ function Despawn()
         Checks.spawned = false
         Speaker.entID = nil
         Speaker.entity = nil
+        Speaker.active = false
     end
 end
 
@@ -209,7 +245,7 @@ function VectorCompare(vector1, vector2)
     return false
 end
 
-function indexOf(array, value)
+function IndexOf(array, value)
     for i, v in ipairs(array) do
         if v == value then
             return i
