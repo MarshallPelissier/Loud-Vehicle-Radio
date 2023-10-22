@@ -25,13 +25,8 @@ Vehicle = {
     station = nil,
     lastLoc = nil,
     mounted = false,
-    entering = false
-}
-
-Checks = {
+    entering = false,
     count = 0,
-    spawned = false,
-    startup = true
 }
 
 local timer = nil
@@ -48,10 +43,7 @@ function Cleanup()
     Vehicle.lastLoc = nil
     Vehicle.mounted = false
     Vehicle.entering = false
-
-    Checks.count = 0
-    Checks.spawned = true
-    Checks.startup = true
+    Vehicle.count = 0
 end
 
 function IsEnteringVehicle()
@@ -75,7 +67,7 @@ function OnVehicleEntered()
         GetVehicleData()
     end
     Vehicle.mounted = true
-    Checks.count = 0
+    Vehicle.count = 0
     Cron.Resume(timer)
 end
 
@@ -128,35 +120,6 @@ function StationChanged()
     local station = GetVehicleStation()
     return Vehicle.station ~= station
 end
-
--- function SetSpeaker()
---     if Game.FindEntityByID(Speaker.entID) ~= nil then
---         Speaker.entity = Game.FindEntityByID(Speaker.entID)
---         Speaker.entity:GetDevicePS():SetCurrentStation(SpeakerStationList[Vehicle.station])
---         if not Speaker.active then
---             Speaker.entity:TurnOnDevice()
---             Speaker.active = true
---         end
---     end
--- end
-
--- function Spawn()
---     print("Spawn Speaker")
---     local transform = Vehicle.base:GetWorldTransform()
---     Speaker.entID = exEntitySpawner.Spawn(Speaker.path, transform)
---     Checks.spawned = true
--- end
-
--- function Despawn()
---     if Game.FindEntityByID(Speaker.entID) ~= nil then
---         print("Despawn Speaker")
---         Game.FindEntityByID(Speaker.entID):GetEntity():Destroy()
---         Checks.spawned = false
---         Speaker.entID = nil
---         Speaker.entity = nil
---         Speaker.active = false
---     end
--- end
 
 function VectorFromPosition(pos)
     return Vector4.new(pos:GetX(),pos:GetY(),pos:GetZ())
@@ -223,12 +186,12 @@ function Update()
             local pos = Vehicle.base:GetWorldTransform().Position
             if VectorCompare(pos, Vehicle.lastLoc) then
                 if Vehicle.mounted == false then
-                    Checks.count = Checks.count + 1
+                    Vehicle.count = Vehicle.count + 1
                 end
             else
                 audio.Teleport(pos, rot)
                 Vehicle.lastLoc = pos
-                Checks.count = 0
+                Vehicle.count = 0
             end
 
             if Vehicle.entering and not IsEnteringVehicle() then
@@ -251,9 +214,9 @@ function Update()
     end
 
     -- stops the timer if the car has been exited, the car has come to a stop, and the speaker is already spawned
-    if audio.spawned and Checks.count > 4 then
+    if audio.spawned and Vehicle.count > 4 then
         Cron.Pause(timer)
-        Checks.count = 0
+        Vehicle.count = 0
     end
 
 end
