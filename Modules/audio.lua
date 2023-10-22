@@ -21,36 +21,36 @@ audio = {
         "radio_station_13_dark_star",
         "radio_station_14_impulse_fm",
     },
-    volume = 4,
+    volume = 3,
     despawnDelay = 7,
     counter = 0,
 }
 
 
 function audio.SetSpeaker(currentStation)
-    print("Set Speakers")
     local station = audio.stationList[currentStation]
-    print(station)
     for _, s in pairs(audio.speakers) do
         local speaker = Game.FindEntityByID(s)
-        speaker:GetDevicePS():SetCurrentStation(station)
-        speaker:TurnOnDevice()
+        if currentStation ~= -1 then
+            speaker:GetDevicePS():SetCurrentStation(station)
+            speaker:TurnOnDevice()
+        else
+            speaker:TurnOffDevice()
+        end
     end
-    audio.ready = true
 end
 
 function audio.SpawnAll(transform)
-    print("Spawn All")
+    audio.ready = false
     for i = 1, audio.volume, 1 do
         audio.Spawn(transform)
     end
-    audio.ready = false
-    
+    audio.spawned = true
+
     local count = 0
     for _ in pairs(audio.speakers) do count = count + 1 end
     print("Radios: ", count)
     print(" ")
-    audio.spawned = true
 end
 
 function audio.Spawn(transform)
@@ -67,7 +67,6 @@ function audio.Despawn()
     audio.speakers = {}
     audio.spawned = false
     audio.active = false
-    audio.ready = false
 end
 
 function audio.Teleport(position, rotation)

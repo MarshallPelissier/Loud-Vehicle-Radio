@@ -26,6 +26,7 @@ Vehicle = {
     lastLoc = nil,
     mounted = false,
     entering = false,
+    ejected = false,
     count = 0,
 }
 
@@ -43,7 +44,10 @@ function Cleanup()
     Vehicle.lastLoc = nil
     Vehicle.mounted = false
     Vehicle.entering = false
+    Vehicle.ejected = false
     Vehicle.count = 0
+
+    Cron.Resume(timer)
 end
 
 function IsEnteringVehicle()
@@ -82,6 +86,12 @@ end
 function OnVehicleExited()
     print("EXITED VEHICLE ---")
     Vehicle.mounted = false
+    print("Ready", audio.ready)
+    print("Spawned", audio.spawned)
+    if not audio.ready and not audio.spawned then
+        print("Ejected")
+        Vehicle.ejected = true
+    end
 end
 
 function HasMountedVehicle()
@@ -117,6 +127,7 @@ function StationChanged()
     if not Vehicle.base:IsVehicle() then
         GetVehicleData()
     end
+
     local station = GetVehicleStation()
     return Vehicle.station ~= station
 end
@@ -168,62 +179,59 @@ function Update()
     end
 
     if Vehicle.base ~= nil then
-        if not audio.ready and IsExitingVehicle() then
+        if not audio.ready and (IsExitingVehicle() or Vehicle.ejected) then
             if audio.spawned then
                 audio.SetSpeaker(Vehicle.station)
+                audio.ready = true
+                Vehicle.ejected = false
             else
                 audio.SpawnAll(Vehicle.base:GetWorldTransform())
             end
         elseif audio.ready then
             -- Check if vehicle radio station has changed
-            if StationChanged() then
-                Vehicle.station = GetVehicleStation()
-                -- Speaker.active = false
-                audio.SetSpeaker(Vehicle.station)
+            if HasMountedVehicle() then  
+                if StationChanged() then
+                    Vehicle.station = GetVehicleStation()
+                    audio.SetSpeaker(Vehicle.station)
+                end
             end
 
             -- moves speaker with vehicle until it comes to a full stop
             local pos = Vehicle.base:GetWorldTransform().Position
-            if VectorCompare(pos, Vehicle.lastLoc) then
-                if Vehicle.mounted == false then
-                    Vehicle.count = Vehicle.count + 1
-                end
-            else
+            if not VectorCompare(pos, Vehicle.lastLoc) then
                 audio.Teleport(pos, rot)
                 Vehicle.lastLoc = pos
                 Vehicle.count = 0
             end
 
+            -- starts Despawn delay after entering vehicle
             if Vehicle.entering and not IsEnteringVehicle() then
-                Vehicle.entering = false
                 audio.counter = 1
             end
-            
             if audio.counter == audio.despawnDelay then
                 audio.counter = 0
                 audio.Despawn()
             elseif audio.counter > 0 then
                 audio.counter = audio.counter + 1
             end
-
             Vehicle.entering = IsEnteringVehicle()
+
+            -- checks if Vehicle has been destroyed then cleans up
+            if Vehicle.base:IsDestroyed() then
+                audio.Despawn()
+                Cron.Pause(timer)
+            end
         end
     else
-        print("Pause")
         Cron.Pause(timer)
     end
-
-    -- stops the timer if the car has been exited, the car has come to a stop, and the speaker is already spawned
-    if audio.spawned and Vehicle.count > 4 then
-        Cron.Pause(timer)
-        Vehicle.count = 0
-    end
-
 end
 
 function LoudVehicleRadio:New()
     registerForEvent("onInit", function()
+
         rot = EulerAngles.new(0,90,0)
+
         Observe('hudCarController', 'OnMountingEvent', function()
             OnVehicleEntered()
         end)
