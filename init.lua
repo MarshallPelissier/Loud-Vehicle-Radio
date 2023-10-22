@@ -24,7 +24,6 @@ Vehicle = {
     record = nil,
     station = nil,
     lastLoc = nil,
-    mounted = false,
     entering = false,
     ejected = false,
     count = 0,
@@ -42,7 +41,6 @@ function Cleanup()
     Vehicle.record = nil
     Vehicle.station = nil
     Vehicle.lastLoc = nil
-    Vehicle.mounted = false
     Vehicle.entering = false
     Vehicle.ejected = false
     Vehicle.count = 0
@@ -66,30 +64,15 @@ function IsInVehicle()
 end
 
 function OnVehicleEntered()
-    print("ENTERED VEHICLE ---")
     if Vehicle.record ~= GetMountedVehicleRecord() then
         GetVehicleData()
     end
-    Vehicle.mounted = true
     Vehicle.count = 0
     Cron.Resume(timer)
 end
 
-function OnVehicleEntering()
-    print("ENTERING VEHICLE")
-end
-
-function OnVehicleExiting()
-    print("EXITING VEHICLE")
-end
-
 function OnVehicleExited()
-    print("EXITED VEHICLE ---")
-    Vehicle.mounted = false
-    print("Ready", audio.ready)
-    print("Spawned", audio.spawned)
     if not audio.ready and not audio.spawned then
-        print("Ejected")
         Vehicle.ejected = true
     end
 end
@@ -160,22 +143,9 @@ function IndexOf(array, value)
     end
 end
 
--- function PrintPosition(pos)
---     local x = pos:GetX()
---     local y = pos:GetY()
---     local z = pos:GetZ()
---     print("X: " .. x .. " - Y: " .. y .. " - Z: " .. z)
--- end
-
 function Update()
     if HasMountedVehicle() and Vehicle.base == nil then
         GetVehicleData()
-    end
-
-    if IsEnteringVehicle() then
-        OnVehicleEntering()
-    elseif IsExitingVehicle() then
-        OnVehicleExiting()
     end
 
     if Vehicle.base ~= nil then

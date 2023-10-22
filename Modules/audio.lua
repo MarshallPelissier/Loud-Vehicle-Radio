@@ -46,11 +46,6 @@ function audio.SpawnAll(transform)
         audio.Spawn(transform)
     end
     audio.spawned = true
-
-    local count = 0
-    for _ in pairs(audio.speakers) do count = count + 1 end
-    print("Radios: ", count)
-    print(" ")
 end
 
 function audio.Spawn(transform)
@@ -60,7 +55,6 @@ function audio.Spawn(transform)
 end
 
 function audio.Despawn()
-    print("Despawn")
     for _, s in pairs(audio.speakers) do
         Game.FindEntityByID(s):GetEntity():Destroy()
     end
