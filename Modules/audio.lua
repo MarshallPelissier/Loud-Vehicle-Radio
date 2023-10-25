@@ -27,11 +27,11 @@ audio = {
 }
 
 
-function audio.SetSpeaker(currentStation)
+function audio.SetSpeaker(currentStation, isPlaying)
     local station = audio.stationList[currentStation]
     for _, s in pairs(audio.speakers) do
         local speaker = Game.FindEntityByID(s)
-        if currentStation ~= -1 then
+        if isPlaying then
             speaker:GetDevicePS():SetCurrentStation(station)
             speaker:TurnOnDevice()
         else
@@ -51,7 +51,6 @@ end
 function audio.Spawn(transform)
     local entID = exEntitySpawner.Spawn(audio.path, transform)
     table.insert(audio.speakers, entID)
-
 end
 
 function audio.Despawn()
@@ -60,6 +59,7 @@ function audio.Despawn()
     end
     audio.speakers = {}
     audio.spawned = false
+    audio.ready = false
     audio.active = false
 end
 

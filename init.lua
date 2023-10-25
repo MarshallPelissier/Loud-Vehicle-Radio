@@ -23,10 +23,20 @@ Vehicle = {
     base = nil,
     record = nil,
     station = nil,
+    playing = false,
     lastLoc = nil,
     entering = false,
+    detached = false,
     ejected = false,
     count = 0,
+}
+
+Save = {
+    reattach = nil,
+    record = nil,
+    station = nil,
+    playing = false,
+    vehicle = nil
 }
 
 local timer = nil
@@ -40,12 +50,21 @@ function Cleanup()
     Vehicle.base = nil
     Vehicle.record = nil
     Vehicle.station = nil
+    Vehicle.playing = false
     Vehicle.lastLoc = nil
     Vehicle.entering = false
     Vehicle.ejected = false
     Vehicle.count = 0
 
     Cron.Resume(timer)
+end
+
+function ResetSave()
+    Save.reattach = nil
+    Save.record = nil
+    Save.station = nil
+    Save.playing = false
+    Save.vehicle = nil
 end
 
 function IsEnteringVehicle()
@@ -64,9 +83,7 @@ function IsInVehicle()
 end
 
 function OnVehicleEntered()
-    if Vehicle.record ~= GetMountedVehicleRecord() then
-        GetVehicleData()
-    end
+    GetVehicleData()
     Vehicle.count = 0
     Cron.Resume(timer)
 end
@@ -100,19 +117,44 @@ function GetVehicleData()
     Vehicle.base:ToggleRadioReceiver(true)
     Vehicle.record = GetMountedVehicleRecord()
     Vehicle.station = GetVehicleStation()
+    Vehicle.playing = GetVehiclePlaying()
 end
 
 function GetVehicleStation()
     return IndexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value)
 end
 
-function StationChanged()
-    if not Vehicle.base:IsVehicle() then
-        GetVehicleData()
-    end
+function GetVehiclePlaying()
+    return Vehicle.base:IsRadioReceiverActive()
+end
 
-    local station = GetVehicleStation()
-    return Vehicle.station ~= station
+function CreateSave(veh)
+    local record = veh:GetVehicle():GetRecordID()
+    
+    if Vehicle.record == record then
+        Cron.Pause(timer)
+        Save.reattach = false
+        Save.record = record
+        Save.station = Vehicle.station
+        Save.playing = Vehicle.playing
+        Cleanup()
+        Save.vehicle = veh:GetVehicle()
+    elseif Save.record == record then
+        Cron.Pause(timer)
+        Save.reattach = false
+        Cleanup()
+        Save.vehicle = veh:GetVehicle()
+    end
+end
+
+function LoadSave(veh)
+    if Vehicle.base == nil and Save.record == veh:GetVehicle():GetRecordID() then
+        Save.vehicle = veh:GetVehicle()
+        if Save.vehicle ~= nil then
+            Save.reattach = true
+            Cron.Resume(timer)
+        end
+    end
 end
 
 function VectorFromPosition(pos)
@@ -151,21 +193,15 @@ function Update()
     if Vehicle.base ~= nil then
         if not audio.ready and (IsExitingVehicle() or Vehicle.ejected) then
             if audio.spawned then
-                audio.SetSpeaker(Vehicle.station)
+                Vehicle.station = GetVehicleStation()
+                audio.SetSpeaker(Vehicle.station, Vehicle.playing)
                 audio.ready = true
                 Vehicle.ejected = false
+                Vehicle.detached = false
             else
                 audio.SpawnAll(Vehicle.base:GetWorldTransform())
             end
         elseif audio.ready then
-            -- Check if vehicle radio station has changed
-            if HasMountedVehicle() then  
-                if StationChanged() then
-                    Vehicle.station = GetVehicleStation()
-                    audio.SetSpeaker(Vehicle.station)
-                end
-            end
-
             -- moves speaker with vehicle until it comes to a full stop
             local pos = Vehicle.base:GetWorldTransform().Position
             if not VectorCompare(pos, Vehicle.lastLoc) then
@@ -192,6 +228,15 @@ function Update()
                 Cron.Pause(timer)
             end
         end
+    elseif Save.reattach then
+        if audio.spawned then
+            audio.SetSpeaker(Save.station, Save.playing)
+            audio.ready = true
+            Save.reattach = false
+            Vehicle.base = Save.vehicle
+        else
+            audio.SpawnAll(Save.vehicle:GetWorldTransform())
+        end
     else
         Cron.Pause(timer)
     end
@@ -210,10 +255,32 @@ function LoudVehicleRadio:New()
             OnVehicleExited()
         end)
 
+        Observe('VehicleComponent', 'OnGameDetach', function(veh)
+            CreateSave(veh)
+        end)
+
+        Observe('VehicleComponent', 'OnSummonStartedEvent', function(veh)
+            LoadSave(veh)
+        end)
+
+        Observe('VehicleComponent', 'OnVehicleRadioEvent', function(_, evt)
+            if evt == nil then
+				evt = _
+			end
+
+            if Vehicle.base ~= nil and Vehicle.base:GetRecordID() == _:GetVehicle():GetRecordID() and not IsExitingVehicle() then
+                Vehicle.playing = evt.toggle
+            end
+        end)
+
         Observe('LoadGameMenuGameController', 'OnUninitialize', function()
             Cleanup()
         end)
-        
+
+        Observe('PlayerPuppet', 'OnDeath', function()
+            Cleanup()
+        end)
+
         if HasMountedVehicle() then
             GetVehicleData()
         end
@@ -225,6 +292,7 @@ function LoudVehicleRadio:New()
 
     registerForEvent("onShutdown", function()
         Cleanup()
+        ResetSave()
     end)
 
     timer = Cron.Every(.1, Update)
