@@ -31,11 +31,13 @@ function audio.SetSpeaker(currentStation, isPlaying)
     local station = audio.stationList[currentStation]
     for _, s in pairs(audio.speakers) do
         local speaker = Game.FindEntityByID(s)
-        if isPlaying then
-            speaker:GetDevicePS():SetCurrentStation(station)
-            speaker:TurnOnDevice()
-        else
-            speaker:TurnOffDevice()
+        if speaker ~= nil then
+            if isPlaying then
+                speaker:GetDevicePS():SetCurrentStation(station)
+                speaker:TurnOnDevice()
+            else
+                speaker:TurnOffDevice()
+            end
         end
     end
 end
@@ -54,8 +56,14 @@ function audio.Spawn(transform)
 end
 
 function audio.Despawn()
+    -- print("Despawn")
     for _, s in pairs(audio.speakers) do
-        Game.FindEntityByID(s):GetEntity():Destroy()
+        if s ~= nil then
+            local ent = Game.FindEntityByID(s):GetEntity()
+            if Game.FindEntityByID(s):GetEntity() ~= nil then
+                ent:Destroy()
+            end
+        end
     end
     audio.speakers = {}
     audio.spawned = false
