@@ -121,7 +121,6 @@ function GetVehicleData()
         if not Vehicle.base:IsPlayerDriver() then
             Vehicle.base = nil
         else
-            Vehicle.base:ToggleRadioReceiver(true)
             Vehicle.record = GetMountedVehicleRecord()
             Vehicle.station = GetVehicleStation()
             Vehicle.playing = GetVehiclePlaying()
