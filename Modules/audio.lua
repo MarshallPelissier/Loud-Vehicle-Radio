@@ -56,12 +56,11 @@ function audio.Spawn(transform)
 end
 
 function audio.Despawn()
-    -- print("Despawn")
     for _, s in pairs(audio.speakers) do
         if s ~= nil then
-            local ent = Game.FindEntityByID(s):GetEntity()
-            if Game.FindEntityByID(s):GetEntity() ~= nil then
-                ent:Destroy()
+            local ent = Game.FindEntityByID(s)
+            if ent ~= nil then
+                ent:GetEntity():Destroy()
             end
         end
     end

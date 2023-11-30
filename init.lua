@@ -83,10 +83,7 @@ function IsInVehicle()
 end
 
 function OnVehicleEntered()
-    --if Vehicle.record ~= GetMountedVehicleRecord() then
-    --print("ENTERED")
     GetVehicleData()
-    --end
     if Vehicle.base ~= nil then
         Vehicle.count = 0
         Cron.Resume(timer)
@@ -94,7 +91,6 @@ function OnVehicleEntered()
 end
 
 function OnVehicleExited()
-    --print("EXITED")
     if not audio.ready and not audio.spawned then
         Vehicle.ejected = true
     end
@@ -146,45 +142,29 @@ function CreateSave(veh)
     
     if Vehicle.record == record then
         Cron.Pause(timer)
-        --print("Detached", veh:GetClassName().value)
         Save.reattach = false
         Save.record = record
         Save.station = Vehicle.station
         Save.playing = Vehicle.playing
         Cleanup()
         Save.vehicle = veh:GetVehicle()
-        --print("Finished -- VEHICLE")
     elseif Save.record == record then
         Cron.Pause(timer)
-        --print("Detached", veh:GetClassName().value)
         Save.reattach = false
         Cleanup()
         Save.vehicle = veh:GetVehicle()
-        --print("Finished -- DETACH")
     end
 end
 
 function LoadSave(veh)
-    --print("SUMMON STARTED")
     if Vehicle.base == nil and Save.record == veh:GetVehicle():GetRecordID() then
-        --print("Component", veh:GetClassName().value)
-        --print("Vehicle", veh:GetVehicle():GetClassName().value)
         Save.vehicle = veh:GetVehicle()
-        --print("Detach", Save.vehicle:GetClassName().value)
         if Save.vehicle ~= nil then
             Save.reattach = true
             Cron.Resume(timer)
         end
     end
 end
-
--- function CheckForSave()
---     print("CHECK FOR SAVE -----")
---     if Save.vehicle ~= nil then
---         print("RESUME TIMER -- SAVE ACTIVE!!!")
---         Cron.Resume(timer)
---     end
--- end
 
 function VectorFromPosition(pos)
     return Vector4.new(pos:GetX(),pos:GetY(),pos:GetZ())
@@ -304,22 +284,12 @@ function LoudVehicleRadio:New()
         end)
 
         Observe('LoadGameMenuGameController', 'OnUninitialize', function()
-            --CreateSave(Vehicle.base)
             Cleanup()
         end)
 
         Observe('PlayerPuppet', 'OnDeath', function()
-            --CreateSave(Vehicle.base)
             Cleanup()
         end)
-
-        -- Observe('PlayerPuppet', 'OnTakeControl', function()
-        --     CheckForSave()
-        -- end)
-
-		-- Observe('PlayerPuppet', 'OnGameAttached', function()
-        --     CheckForSave()
-        -- end)
 
         if HasMountedVehicle() then
             GetVehicleData()
@@ -332,7 +302,6 @@ function LoudVehicleRadio:New()
 
     registerForEvent("onShutdown", function()
         Cleanup()
-        --print("Shutdown")
         ResetSave()
     end)
 
