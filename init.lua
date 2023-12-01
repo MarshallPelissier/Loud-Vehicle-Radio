@@ -41,6 +41,8 @@ Save = {
 
 local timer = nil
 local rot = nil
+local playingCheck = false
+local lastVehicle = nil
 
 LoudVehicleRadio = {}
 
@@ -83,7 +85,11 @@ function IsInVehicle()
 end
 
 function OnVehicleEntered()
+
     GetVehicleData()
+    if Vehicle.record ~= nil and lastVehicle ~= nil and Vehicle.record ~= lastVehicle then
+        audio.Despawn()
+    end
     if Vehicle.base ~= nil then
         Vehicle.count = 0
         Cron.Resume(timer)
@@ -94,6 +100,8 @@ function OnVehicleExited()
     if not audio.ready and not audio.spawned then
         Vehicle.ejected = true
     end
+    playingCheck = false
+    lastVehicle = Vehicle.record
 end
 
 function HasMountedVehicle()
@@ -123,7 +131,11 @@ function GetVehicleData()
         else
             Vehicle.record = GetMountedVehicleRecord()
             Vehicle.station = GetVehicleStation()
-            Vehicle.playing = GetVehiclePlaying()
+            if lastVehicle ~= nil then
+                if Vehicle.record ~= lastVehicle then
+                    Vehicle.playing = GetVehiclePlaying()
+                end
+            end
         end
     end
 end
@@ -199,6 +211,15 @@ function Update()
     end
 
     if Vehicle.base ~= nil then
+        if IsEnteringVehicle() then
+            playingCheck = true
+        elseif not IsEnteringVehicle() and playingCheck then
+            if not Vehicle.playing then
+                Vehicle.playing = GetVehiclePlaying()
+            end
+            playingCheck = false
+        end
+
         if not audio.ready and (IsExitingVehicle() or Vehicle.ejected) then
             if audio.spawned then
                 Vehicle.station = GetVehicleStation()
