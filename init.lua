@@ -44,9 +44,7 @@ Vehicle = {
     playing = false,
     lastLoc = nil,
     entering = false,
-    detached = false,
     ejected = false,
-    count = 0,
 }
 
 Save = {
@@ -62,7 +60,6 @@ local timer = nil
 local rot = nil
 local playingCheck = false
 local lastVehicle = nil
---local radioExt = nil
 
 LoudVehicleRadio = {}
 
@@ -77,7 +74,6 @@ function Cleanup()
     Vehicle.lastLoc = nil
     Vehicle.entering = false
     Vehicle.ejected = false
-    Vehicle.count = 0
 
     Cron.Resume(timer)
 end
@@ -113,7 +109,6 @@ function OnVehicleEntered()
         audio.DespawnRadio()
     end
     if Vehicle.base ~= nil then
-        Vehicle.count = 0
         Cron.Resume(timer)
     end
 end
@@ -153,7 +148,6 @@ function GetVehicleData()
         else
             Vehicle.record = GetMountedVehicleRecord()
             Vehicle.station = GetVehicleStation()
-            print("Data: ", Vehicle.station)
             Vehicle.stationExt = GetRadioExtStation()
             if lastVehicle ~= nil then
                 if Vehicle.record ~= lastVehicle then
@@ -265,19 +259,14 @@ function Update()
         if not audio.ready and (IsExitingVehicle() or Vehicle.ejected) then
             if audio.spawned then
                 Vehicle.station = GetVehicleStation()
-                print("Exiting: ", Vehicle.station)
                 Vehicle.stationExt = GetRadioExtStation()
-                print("EXT: ", Vehicle.stationExt)
                 if Vehicle.stationExt then
-                    print("EXT Set")
                     audio.SetRadio(Vehicle.stationExt, true)
                 else
-                    print("Regular Set")
                     audio.SetRadio(Vehicle.station, Vehicle.playing)
                 end
                 audio.ready = true
                 Vehicle.ejected = false
-                Vehicle.detached = false
             else
                 audio.SpawnRadios(Vehicle.base:GetWorldTransform())
             end
@@ -287,7 +276,6 @@ function Update()
             if not VectorCompare(pos, Vehicle.lastLoc) then
                 audio.TeleportRadio(pos, rot)
                 Vehicle.lastLoc = pos
-                Vehicle.count = 0
             end
 
             -- starts Despawn delay after entering vehicle
@@ -311,7 +299,11 @@ function Update()
         
     elseif Save.reattach then
         if audio.spawned then
-            audio.SetRadio(Save.station, Save.playing)
+            if Save.stationExt then
+                audio.SetRadio(Save.stationExt, true)
+            else
+                audio.SetRadio(Save.station, Save.playing)
+            end
             audio.ready = true
             Save.reattach = false
             Vehicle.base = Save.vehicle
