@@ -19,10 +19,28 @@ VehicleStationList = {
     "Gameplay-Devices-Radio-RadioStationImpulseFM",
 }
 
+VehicleStationList2 = {
+    "Gameplay-Devices-Radio-RadioStationAggroIndie",
+    "Gameplay-Devices-Radio-RadioStationElectroIndie",
+    "Gameplay-Devices-Radio-RadioStationHipHop",
+    "Gameplay-Devices-Radio-RadioStationAggroTechno",
+    "Gameplay-Devices-Radio-RadioStationDownTempo",
+    "Gameplay-Devices-Radio-RadioStationAttRock",
+    "Gameplay-Devices-Radio-RadioStationPop",
+    "Gameplay-Devices-Radio-RadioStationLatino",
+    "Gameplay-Devices-Radio-RadioStationMetal",
+    "Gameplay-Devices-Radio-RadioStationMinimalTechno",
+    "Gameplay-Devices-Radio-RadioStationJazz",
+    "Gameplay-Devices-Radio-RadioStationGrowlFm",
+    "Gameplay-Devices-Radio-RadioStationDarkStar",
+    "Gameplay-Devices-Radio-RadioStationImpulseFM",
+}
+
 Vehicle = {
     base = nil,
     record = nil,
     station = nil,
+    stationExt = nil,
     playing = false,
     lastLoc = nil,
     entering = false,
@@ -35,6 +53,7 @@ Save = {
     reattach = nil,
     record = nil,
     station = nil,
+    stationExt = nil,
     playing = false,
     vehicle = nil
 }
@@ -43,15 +62,17 @@ local timer = nil
 local rot = nil
 local playingCheck = false
 local lastVehicle = nil
+--local radioExt = nil
 
 LoudVehicleRadio = {}
 
 function Cleanup()
-    audio.Despawn()
+    audio.DespawnRadio()
 
     Vehicle.base = nil
     Vehicle.record = nil
     Vehicle.station = nil
+    Vehicle.stationExt = nil
     Vehicle.playing = false
     Vehicle.lastLoc = nil
     Vehicle.entering = false
@@ -65,6 +86,7 @@ function ResetSave()
     Save.reattach = nil
     Save.record = nil
     Save.station = nil
+    Save.stationExt = nil
     Save.playing = false
     Save.vehicle = nil
 end
@@ -88,7 +110,7 @@ function OnVehicleEntered()
 
     GetVehicleData()
     if Vehicle.record ~= nil and lastVehicle ~= nil and Vehicle.record ~= lastVehicle then
-        audio.Despawn()
+        audio.DespawnRadio()
     end
     if Vehicle.base ~= nil then
         Vehicle.count = 0
@@ -131,6 +153,8 @@ function GetVehicleData()
         else
             Vehicle.record = GetMountedVehicleRecord()
             Vehicle.station = GetVehicleStation()
+            print("Data: ", Vehicle.station)
+            Vehicle.stationExt = GetRadioExtStation()
             if lastVehicle ~= nil then
                 if Vehicle.record ~= lastVehicle then
                     Vehicle.playing = GetVehiclePlaying()
@@ -141,7 +165,22 @@ function GetVehicleData()
 end
 
 function GetVehicleStation()
-    return IndexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value)
+    local radioExt = GetMod("radioExt")
+    if radioExt then
+        return IndexOf(VehicleStationList2, Vehicle.base:GetRadioReceiverStationName().value) - 1
+    else
+        return IndexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value)
+    end
+end
+
+function GetRadioExtStation()
+    local radioExt = GetMod("radioExt")
+    if radioExt then
+        if radioExt.radioManager.managerV:getActiveStationData() then
+            return audio.GetRadioID(radioExt.radioManager.managerV:getActiveStationData().station)
+        end
+    end
+    return nil
 end
 
 function GetVehiclePlaying()
@@ -156,6 +195,7 @@ function CreateSave(veh)
         Save.reattach = false
         Save.record = record
         Save.station = Vehicle.station
+        Save.stationExt = Vehicle.stationExt
         Save.playing = Vehicle.playing
         Cleanup()
         Save.vehicle = veh:GetVehicle()
@@ -206,8 +246,10 @@ function IndexOf(array, value)
 end
 
 function Update()
+    
     if HasMountedVehicle() and Vehicle.base == nil then
         GetVehicleData()
+        Vehicle.playing = GetVehiclePlaying()
     end
 
     if Vehicle.base ~= nil then
@@ -223,18 +265,27 @@ function Update()
         if not audio.ready and (IsExitingVehicle() or Vehicle.ejected) then
             if audio.spawned then
                 Vehicle.station = GetVehicleStation()
-                audio.SetSpeaker(Vehicle.station, Vehicle.playing)
+                print("Exiting: ", Vehicle.station)
+                Vehicle.stationExt = GetRadioExtStation()
+                print("EXT: ", Vehicle.stationExt)
+                if Vehicle.stationExt then
+                    print("EXT Set")
+                    audio.SetRadio(Vehicle.stationExt, true)
+                else
+                    print("Regular Set")
+                    audio.SetRadio(Vehicle.station, Vehicle.playing)
+                end
                 audio.ready = true
                 Vehicle.ejected = false
                 Vehicle.detached = false
             else
-                audio.SpawnAll(Vehicle.base:GetWorldTransform())
+                audio.SpawnRadios(Vehicle.base:GetWorldTransform())
             end
         elseif audio.ready then
             -- moves speaker with vehicle until it comes to a full stop
             local pos = Vehicle.base:GetWorldTransform().Position
             if not VectorCompare(pos, Vehicle.lastLoc) then
-                audio.Teleport(pos, rot)
+                audio.TeleportRadio(pos, rot)
                 Vehicle.lastLoc = pos
                 Vehicle.count = 0
             end
@@ -245,7 +296,7 @@ function Update()
             end
             if audio.counter == audio.despawnDelay then
                 audio.counter = 0
-                audio.Despawn()
+                audio.DespawnRadio()
             elseif audio.counter > 0 then
                 audio.counter = audio.counter + 1
             end
@@ -254,18 +305,18 @@ function Update()
 
         -- checks if Vehicle has been destroyed then cleans up
         if Vehicle.base:IsDestroyed() then
-            audio.Despawn()
+            audio.DespawnRadio()
             Cron.Pause(timer)
         end
         
     elseif Save.reattach then
         if audio.spawned then
-            audio.SetSpeaker(Save.station, Save.playing)
+            audio.SetRadio(Save.station, Save.playing)
             audio.ready = true
             Save.reattach = false
             Vehicle.base = Save.vehicle
         else
-            audio.SpawnAll(Save.vehicle:GetWorldTransform())
+            audio.SpawnRadios(Save.vehicle:GetWorldTransform())
         end
     else
         Cron.Pause(timer)
@@ -310,10 +361,6 @@ function LoudVehicleRadio:New()
         Observe('PlayerPuppet', 'OnDeath', function()
             Cleanup()
         end)
-
-        if HasMountedVehicle() then
-            GetVehicleData()
-        end
     end)
 
     registerForEvent("onUpdate", function(delta)
@@ -323,6 +370,10 @@ function LoudVehicleRadio:New()
     registerForEvent("onShutdown", function()
         Cleanup()
         ResetSave()
+    end)
+
+    Cron.After(0.1, function ()
+        audio.Initialize()
     end)
 
     timer = Cron.Every(.1, Update)
