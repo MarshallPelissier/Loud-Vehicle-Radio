@@ -159,12 +159,7 @@ function GetVehicleData()
 end
 
 function GetVehicleStation()
-    local radioExt = GetMod("radioExt")
-    if radioExt then
-        return IndexOf(VehicleStationList2, Vehicle.base:GetRadioReceiverStationName().value) - 1
-    else
-        return IndexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value)
-    end
+    return IndexOf(VehicleStationList, Vehicle.base:GetRadioReceiverStationName().value) - 1
 end
 
 function GetRadioExtStation()
