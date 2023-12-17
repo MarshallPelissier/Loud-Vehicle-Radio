@@ -2,24 +2,9 @@ local LoudVehicleRadio = { version = "1.0.0" }
 local Cron = require("Modules/Cron")
 local audio = require("Modules/audio")
 
-VehicleStationList = {
-    "Gameplay-Devices-Radio-RadioStationAggroIndie",
-    "Gameplay-Devices-Radio-RadioStationElectroIndie",
-    "Gameplay-Devices-Radio-RadioStationHipHop",
-    "Gameplay-Devices-Radio-RadioStationAggroTechno",
-    "Gameplay-Devices-Radio-RadioStationDownTempo",
-    "Gameplay-Devices-Radio-RadioStationAttRock",
-    "Gameplay-Devices-Radio-RadioStationPop",
-    "Gameplay-Devices-Radio-RadioStationLatino",
-    "Gameplay-Devices-Radio-RadioStationMetal",
-    "Gameplay-Devices-Radio-RadioStationMinimalTechno",
-    "Gameplay-Devices-Radio-RadioStationJazz",
-    "Gameplay-Devices-Radio-RadioStationGrowlFm",
-    "Gameplay-Devices-Radio-RadioStationDarkStar",
-    "Gameplay-Devices-Radio-RadioStationImpulseFM",
-}
+local disableRadioPort = true
 
-VehicleStationList2 = {
+VehicleStationList = {
     "Gameplay-Devices-Radio-RadioStationAggroIndie",
     "Gameplay-Devices-Radio-RadioStationElectroIndie",
     "Gameplay-Devices-Radio-RadioStationHipHop",
@@ -53,13 +38,23 @@ Save = {
     station = nil,
     stationExt = nil,
     playing = false,
-    vehicle = nil
+    vehicle = nil,
+    update = nil,
+
 }
+
+--RadioToggleEvent
+---@class RadioToggleEvent : redEvent
+RadioToggleEvent = {}
+
+---@return RadioToggleEvent
+function RadioToggleEvent.new() return end
 
 local timer = nil
 local rot = nil
 local playingCheck = false
 local lastVehicle = nil
+local pocketUnmount = false
 
 LoudVehicleRadio = {}
 
@@ -85,6 +80,11 @@ function ResetSave()
     Save.stationExt = nil
     Save.playing = false
     Save.vehicle = nil
+    Save.update = nil
+end
+
+function GetPocketRadio()
+    return Game.GetPlayer():GetPocketRadio()
 end
 
 function IsEnteringVehicle()
@@ -186,11 +186,16 @@ function CreateSave(veh)
         Save.station = Vehicle.station
         Save.stationExt = Vehicle.stationExt
         Save.playing = Vehicle.playing
+        Save.update = Vehicle.playing
         Cleanup()
         Save.vehicle = veh:GetVehicle()
     elseif Save.record == record then
         Cron.Pause(timer)
         Save.reattach = false
+        Save.station = Vehicle.station
+        Save.stationExt = Vehicle.stationExt
+        Save.playing = Vehicle.playing
+        Save.update = Vehicle.playing
         Cleanup()
         Save.vehicle = veh:GetVehicle()
     end
@@ -203,6 +208,13 @@ function LoadSave(veh)
             Save.reattach = true
             Cron.Resume(timer)
         end
+    end
+end
+
+function StationSave()
+    local radioExt = GetMod("radioExt")
+    if radioExt and Save.stationExt then
+        
     end
 end
 
@@ -236,6 +248,21 @@ end
 
 function Update()
     
+    if pocketUnmount then
+        if disableRadioPort then
+            print("Test")
+    
+            -- local evt = RadioToggleEvent()
+            -- GetPocketRadio():HandleRadioToggleEvent(RadioToggleEvent.new())
+
+            print("Active: ", GetPocketRadio():IsActive())
+            local evt = RadioToggleEvent.new()
+            GetPocketRadio():HandleRadioToggleEvent(evt)
+            print("Finish")
+        end
+        pocketUnmount = false
+    end
+
     if HasMountedVehicle() and Vehicle.base == nil then
         GetVehicleData()
         Vehicle.playing = GetVehiclePlaying()
@@ -247,6 +274,10 @@ function Update()
         elseif not IsEnteringVehicle() and playingCheck then
             if not Vehicle.playing then
                 Vehicle.playing = GetVehiclePlaying()
+                if not Vehicle.playing and Save.update then
+                    Vehicle.base:ToggleRadioReceiver(true)
+                    Save.update = false
+                end
             end
             playingCheck = false
         end
@@ -348,6 +379,11 @@ function LoudVehicleRadio:New()
         Observe('PlayerPuppet', 'OnDeath', function()
             Cleanup()
         end)
+
+        Observe('PocketRadio', 'HandleVehicleUnmounted', function()
+            pocketUnmount = true
+        end)
+
     end)
 
     registerForEvent("onUpdate", function(delta)
