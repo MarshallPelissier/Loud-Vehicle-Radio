@@ -2,7 +2,7 @@ local LoudVehicleRadio = { version = "1.0.0" }
 local Cron = require("Modules/Cron")
 local audio = require("Modules/audio")
 
-local disableRadioPort = true
+local disableRadioPort = false
 
 VehicleStationList = {
     "Gameplay-Devices-Radio-RadioStationAggroIndie",
@@ -55,6 +55,7 @@ local rot = nil
 local playingCheck = false
 local lastVehicle = nil
 local pocketUnmount = false
+local radioPortActive = false
 
 LoudVehicleRadio = {}
 
@@ -69,6 +70,8 @@ function Cleanup()
     Vehicle.lastLoc = nil
     Vehicle.entering = false
     Vehicle.ejected = false
+
+    radioPortActive = false
 
     Cron.Resume(timer)
 end
@@ -103,6 +106,7 @@ function IsInVehicle()
 end
 
 function OnVehicleEntered()
+    radioPortActive = GetPocketRadio():IsActive()
 
     GetVehicleData()
     if Vehicle.record ~= nil and lastVehicle ~= nil and Vehicle.record ~= lastVehicle then
@@ -186,7 +190,7 @@ function CreateSave(veh)
         Save.station = Vehicle.station
         Save.stationExt = Vehicle.stationExt
         Save.playing = Vehicle.playing
-        Save.update = Vehicle.playing
+        Save.update = Vehicle.playing or Save.stationExt ~= -1
         Cleanup()
         Save.vehicle = veh:GetVehicle()
     elseif Save.record == record then
@@ -195,7 +199,7 @@ function CreateSave(veh)
         Save.station = Vehicle.station
         Save.stationExt = Vehicle.stationExt
         Save.playing = Vehicle.playing
-        Save.update = Vehicle.playing
+        Save.update = Vehicle.playing or Save.stationExt ~= -1
         Cleanup()
         Save.vehicle = veh:GetVehicle()
     end
@@ -249,16 +253,9 @@ end
 function Update()
     
     if pocketUnmount then
-        if disableRadioPort then
-            print("Test")
-    
-            -- local evt = RadioToggleEvent()
-            -- GetPocketRadio():HandleRadioToggleEvent(RadioToggleEvent.new())
-
-            print("Active: ", GetPocketRadio():IsActive())
+        if (not radioPortActive or disableRadioPort) and GetPocketRadio():IsActive() then
             local evt = RadioToggleEvent.new()
             GetPocketRadio():HandleRadioToggleEvent(evt)
-            print("Finish")
         end
         pocketUnmount = false
     end
@@ -275,7 +272,18 @@ function Update()
             if not Vehicle.playing then
                 Vehicle.playing = GetVehiclePlaying()
                 if not Vehicle.playing and Save.update then
-                    Vehicle.base:ToggleRadioReceiver(true)
+                    if Save.stationExt ~= -1 then
+                        local radioExt = GetMod("radioExt")
+                        if radioExt then
+                            local radio = radioExt.radioManager:getRadioByIndex(Save.stationExt)
+
+                            if radio then
+                                radioExt.radioManager.managerV:switchToRadio(radio)
+                            end
+                        end
+                    else
+                        Vehicle.base:ToggleRadioReceiver(true)
+                    end
                     Save.update = false
                 end
             end
@@ -383,7 +391,6 @@ function LoudVehicleRadio:New()
         Observe('PocketRadio', 'HandleVehicleUnmounted', function()
             pocketUnmount = true
         end)
-
     end)
 
     registerForEvent("onUpdate", function(delta)
