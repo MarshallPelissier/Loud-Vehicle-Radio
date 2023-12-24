@@ -1,15 +1,25 @@
 audio = {
-    active = false,
-    spawned = false,
-    ready = false,
     volume = 3,
     despawnDelay = 7,
-    counter = 0,
 }
+
+data = {}
+data.__index = data
+
+function data:new()
+    local o = setmetatable({}, data)
+    
+    o.active = false
+    o.spawned = false
+    o.ready = false
+    o.radios = {}
+    o.counter = 0
+
+   	return o
+end
 
 radio = {
     path = "base\\quest\\main_quests\\prologue\\q000\\entities\\q000_invisible_radio.ent",
-    radios = {},
     stations = {
         [0] = "Radio Vexelstrom",
         [1] = "Night FM",
@@ -28,7 +38,8 @@ radio = {
     },
 }
 
-function audio.Initialize()
+function audio:Initialize()
+    print("Initialize Audio")
     local radioExt = GetMod("radioExt")
     if radioExt then
         local rs = radioExt.radioManager.radios
@@ -39,7 +50,7 @@ function audio.Initialize()
     end
 end
 
-function audio.GetRadioID(stationName)
+function audio:GetRadioID(stationName)
     for key, value in pairs(radio.stations) do
         if value == stationName then
             return key
@@ -47,8 +58,8 @@ function audio.GetRadioID(stationName)
     end
 end
 
-function audio.SetRadio(currentStation, isPlaying)
-    for _, r in pairs(radio.radios) do
+function audio:SetRadio(currentStation, isPlaying, data)
+    for _, r in pairs(data.radios) do
         local ent = Game.FindEntityByID(r)
         if ent ~= nil then
             if isPlaying then
@@ -62,21 +73,25 @@ function audio.SetRadio(currentStation, isPlaying)
     end
 end
 
-function audio.SpawnRadios(transform)
-    audio.ready = false
+function audio:SpawnRadios(transform, data)
+    data.ready = false
+    data.spawned = true
+    print("Audio Volume: ", audio.volume)
     for i = 1, audio.volume, 1 do
-        audio.SpawnRadio(transform)
+        audio:SpawnRadio(transform, data)
     end
-    audio.spawned = true
 end
 
-function audio.SpawnRadio(transform)
+function audio:SpawnRadio(transform, data)
     local entID = exEntitySpawner.Spawn(radio.path, transform)
-    table.insert(radio.radios, entID)
+    print("Ent: ", entID)
+    print("Table: ", data.radios)
+    table.insert(data.radios, entID)
 end
 
-function audio.DespawnRadio()
-    for _, s in pairs(radio.radios) do
+function audio:DespawnRadio(data)
+    print("despawn")
+    for _, s in pairs(data.radios) do
         if s ~= nil then
             local ent = Game.FindEntityByID(s)
             if ent ~= nil then
@@ -84,14 +99,14 @@ function audio.DespawnRadio()
             end
         end
     end
-    radio.radios = {}
-    audio.spawned = false
-    audio.ready = false
-    audio.active = false
+    data.radios = {}
+    data.spawned = false
+    data.ready = false
+    data.active = false
 end
 
-function audio.TeleportRadio(position, rotation)
-    for _, r in pairs(radio.radios) do
+function audio:TeleportRadio(position, rotation, data)
+    for _, r in pairs(data.radios) do
         local radio = Game.FindEntityByID(r)
         Game.GetTeleportationFacility():Teleport(radio, VectorFromPosition(position) , rotation)
     end
