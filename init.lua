@@ -69,14 +69,14 @@ SaveList = {
 }
 
 function AddVehicle(veh)
-    if not IsInVehicleList(veh) then
+    if veh ~= nil and not IsInVehicleList(veh) then
         AddList(VehicleList.list, veh)
         VehicleList.count = VehicleList.count + 1
     end
 end
 
 function RemoveVehicle(veh)
-    if IsInVehicleList(veh) then
+    if veh ~= nil and IsInVehicleList(veh) then
         RemoveList(VehicleList.list, veh)
         VehicleList.count = VehicleList.count - 1
     end
@@ -97,14 +97,14 @@ function IsInVehicleListRecord(record)
 end
 
 function AddSave(save)
-    if not IsInSaveList(save) then
+    if save ~= nil and not IsInSaveList(save) then
         AddList(SaveList.list, save)
         SaveList.count = SaveList.count + 1
     end
 end
 
 function RemoveSave(save)
-    if IsInSaveList(save) then
+    if save ~= nil and IsInSaveList(save) then
         RemoveList(SaveList.list, save)
         SaveList.count = SaveList.count - 1
     end
@@ -137,6 +137,7 @@ local pocketUnmount = false
 local radioPortActive = false
 local despawnSameVehicle = false
 local delayCounter = 0
+local despawnDelay = 7
 
 
 function Cleanup()
@@ -232,21 +233,14 @@ function OnVehicleEntered()
     despawnSameVehicle = false
     local tempBase = GetVehicleBase()
     local tempVeh = IsInVehicleListRecord(tempBase:GetRecordID())
-    print("List Count: ", VehicleList.count)
-    if tempVeh ~= nil then
-        print("Is In List: ", IsInVehicleList(tempVeh))
-    end
 
     if tempVeh ~= nil and IsInVehicleList(tempVeh) then
         Vehicle = tempVeh
         despawnSameVehicle = true
     elseif Vehicle == nil or Vehicle.base == nil or Vehicle.record ~= tempBase:GetRecordID() then
-        print("New Vehicle")
         Vehicle = vehicle()
-        print("Spawned: ", Vehicle.data.spawned)
+        Vehicle.base = tempBase
     end
-    
-    Vehicle.base = tempBase
 
     SetVehicleRadioData()
     radioPortActive = GetPocketRadio():IsActive()
@@ -254,12 +248,13 @@ end
 
 function OnVehicleExited()
     AddVehicle(Vehicle)
-    Cron.Resume(spawnTimer)
+    if Vehicle.playing then
+        Cron.Resume(spawnTimer)
+    end
 end
 
 function SpawnSetRadio()
     if Vehicle.data.spawned then
-        print("Set Radio")
         if Vehicle.stationExt then
             Vehicle.data.SetRadio(Vehicle.stationExt, true, Vehicle.data)
         else
@@ -268,7 +263,6 @@ function SpawnSetRadio()
         Vehicle.data.ready = true
         Cron.Pause(spawnTimer)
     else
-        print("Spawn Radio")
         Vehicle.data.SpawnRadios(Vehicle.base:GetWorldTransform(), Vehicle.data)
     end
 end
@@ -297,8 +291,7 @@ function Update()
             if Vehicle.entering and not IsEnteringVehicle() then
                 delayCounter = 1
             end
-            if delayCounter == Vehicle.data.despawnDelay then
-                print("despawn counter")
+            if delayCounter == despawnDelay then
                 delayCounter = 0
                 Vehicle.data.DespawnRadio(Vehicle.data)
                 despawnSameVehicle = false
@@ -365,10 +358,6 @@ function LoudVehicleRadio:New()
 				evt = _
 			end
 
-            -- print("OnVehicleRadioEvent")
-            -- print("Toggle: ", evt.toggle)
-            -- print("Set Station: ", evt.setStation)
-            -- print("Station ID: ", evt.station)
             Vehicle.station = evt.station
             Vehicle.playing = evt.toggle;
 
@@ -381,13 +370,10 @@ function LoudVehicleRadio:New()
         end)
 
         Observe('VehicleComponent', 'OnRadioToggleEvent', function(_, evt)
-            local active = not _:GetVehicle():IsRadioReceiverActive()
-            if active then
+            Vehicle.playing = not Vehicle.playing;
+            if Vehicle.playing then
                 Vehicle.station = GetVehicleStation()
                 Vehicle.stationExt = GetRadioExtStation()
-                Vehicle.playing = true;
-            else
-                Vehicle.playing = false;
             end
         end)
 

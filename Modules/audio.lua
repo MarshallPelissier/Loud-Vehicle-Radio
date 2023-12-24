@@ -6,8 +6,9 @@ function Audio.audio()
         spawned = false,
         ready = false,
         radios = {},
-        despawnDelay = 7,
     }
+
+    local volume = 3
 
     local radio = {
         path = "base\\quest\\main_quests\\prologue\\q000\\entities\\q000_invisible_radio.ent",
@@ -29,10 +30,7 @@ function Audio.audio()
         },
     }
 
-    local volume = 3
-
     function self.Initialize()
-        print("Initialize Audio")
         local radioExt = GetMod("radioExt")
         if radioExt then
             local rs = radioExt.radioManager.radios
@@ -80,7 +78,6 @@ function Audio.audio()
     end
 
     function self.DespawnRadio()
-        print("despawn")
         for _, s in pairs(self.radios) do
             if s ~= nil then
                 local ent = Game.FindEntityByID(s)
