@@ -1,41 +1,28 @@
 local LoudVehicleRadio = { version = "1.0.0" }
 local Cron = require("Modules/Cron")
 local Audio = require("Modules/audio")
---local Classes = require("Modules/Classes")
-
-local disableRadioPort = false
-
--- Data to allow multiple vehicles at the same time
-function vehicle()
-    local self = {
-        base = nil,
-        record = nil,
-        station = nil,
-        stationExt = nil,
-        playing = false,
-        lastLoc = nil,
-        entering = false,
-        data = Audio.audio(),
-    }
-    self.data.Initialize()
-    return self
-end
-
--- Save data for reloading and summoning vehicles
-function save()
-    local self = {
-        base = nil,
-        record = nil,
-        station = nil,
-        stationExt = nil,
-        playing = false,
-        reattach = nil,
-        update = nil,
-    }
-    return self
-end
 
 LoudVehicleRadio = {}
+
+-- Always turn off Radio Port when exiting vehicle
+local disableRadioPort = false
+
+--RadioToggleEvent
+---@class RadioToggleEvent : redEvent
+RadioToggleEvent = {}
+
+---@return RadioToggleEvent
+function RadioToggleEvent.new() return end
+
+local updateTimer = nil
+local rot = nil
+local pocketUnmount = false
+local radioPortActive = false
+local despawnSameVehicle = false
+local delayCounter = 0
+local despawnDelay = 7
+local entering = false
+
 
 VehicleStationList = {
     "Gameplay-Devices-Radio-RadioStationAggroIndie",
@@ -54,24 +41,70 @@ VehicleStationList = {
     "Gameplay-Devices-Radio-RadioStationImpulseFM",
 }
 
-Vehicle = nil
+-- for loading vehicles
+Save = {
+    playing = false,
+    stationExt = 0,
+}
 
-Save = nil
+-- Data to allow multiple vehicles at the same time
+function vehicle()
+    local self = {
+        base = nil,
+        record = nil,
+        station = nil,
+        stationExt = nil,
+        playing = false,
+        lastLoc = nil,
+        saveStation = nil,
+        saveExt = nil,
+        savePlaying = false,
+        despawn = false,
+        timer = nil,
+        audio = Audio.audio(),
+    }
+
+    self.audio.Initialize()
+
+    function self.SpawnSetRadios()
+        if self.audio.spawned then
+            if self.stationExt then
+                self.audio.SetRadio(self.stationExt, true)
+            else
+                self.audio.SetRadio(self.station, self.playing)
+            end
+            self.audio.ready = true
+            Cron.Pause(self.timer)
+        else
+            self.audio.SpawnRadios(self.base:GetWorldTransform())
+        end
+    end
+
+    function self.StartTimer()
+        Cron.Resume(self.timer)
+    end
+
+    self.timer = Cron.Every(.1, self.SpawnSetRadios)
+    Cron.Pause(self.timer)
+
+    return self
+end
+
+Vehicle = nil
 
 VehicleList = {
     count = 0,
     list = {},
 }
 
-SaveList = {
-    count = 0,
-    list = {},
-}
-
+--Vehicle List
 function AddVehicle(veh)
-    if veh ~= nil and not IsInVehicleList(veh) then
-        AddList(VehicleList.list, veh)
-        VehicleList.count = VehicleList.count + 1
+    if veh ~= nil   then
+        local v = GetVehicleInListFromRecord(veh.record)
+        if v == nil then
+            AddList(VehicleList.list, veh)
+            VehicleList.count = VehicleList.count + 1
+        end
     end
 end
 
@@ -83,19 +116,14 @@ function RemoveVehicle(veh)
 end
 
 function IsInVehicleList(veh)
-    return IsInVehicleListRecord(veh.record) ~= nil
+    return GetVehicleInListFromRecord(veh.record) ~= nil
 end
 
-function IsInVehicleListRecord(record)
-    for i, v in ipairs(VehicleList.list) do
-        if v.record == record then
-            return v
-        end
-    end
-
-    return nil
+function GetVehicleInListFromRecord(record)
+    return GetItemInListFromRecord(VehicleList.list, record)
 end
 
+--Save List
 function AddSave(save)
     if save ~= nil and not IsInSaveList(save) then
         AddList(SaveList.list, save)
@@ -111,9 +139,14 @@ function RemoveSave(save)
 end
 
 function IsInSaveList(save)
-    return IndexOf(SaveList.list, save) ~= -1
+    return GetItemInListFromRecord(save.record) ~= nil
 end
 
+function GetSaveInListFromRecord(record)
+    return GetItemInListFromRecord(SaveList.list, record)
+end
+
+-- List functions
 function AddList(list, item)
     table.insert(list, item)
 end
@@ -122,42 +155,27 @@ function RemoveList(list, item)
     table.remove(list, IndexOf(list,item))
 end
 
+function GetItemInListFromRecord(list, record)
+    for i, v in ipairs(list) do
+        if v.record == record then
+            return v
+        end
+    end
 
---RadioToggleEvent
----@class RadioToggleEvent : redEvent
-RadioToggleEvent = {}
-
----@return RadioToggleEvent
-function RadioToggleEvent.new() return end
-
-local updateTimer = nil
-local spawnTimer = nil
-local rot = nil
-local pocketUnmount = false
-local radioPortActive = false
-local despawnSameVehicle = false
-local delayCounter = 0
-local despawnDelay = 7
+    return nil
+end
 
 
 function Cleanup()
     for i,v in ipairs(VehicleList.list) do
-        v.data.DespawnRadio(v.data)
-
-        v.base = nil
-        v.record = nil
-        v.station = nil
-        v.stationExt = nil
-        v.playing = false
-        v.lastLoc = nil
-        v.entering = false
+        v.audio.DespawnRadio()
     end
-
+    Vehicle = nil
+    pocketUnmount = false
     radioPortActive = false
-
-    Cron.Resume(updateTimer)
+    despawnSameVehicle = false
+    entering = false
 end
-
 
 -- Vehicle and Radio Data
 function GetPocketRadio()
@@ -215,7 +233,7 @@ function GetRadioExtStation()
     local radioExt = GetMod("radioExt")
     if radioExt then
         if radioExt.radioManager.managerV:getActiveStationData() then
-            return Vehicle.data.GetRadioID(radioExt.radioManager.managerV:getActiveStationData().station)
+            return Vehicle.audio.GetRadioID(radioExt.radioManager.managerV:getActiveStationData().station)
         end
     end
     return nil
@@ -228,11 +246,10 @@ function SetVehicleRadioData()
     Vehicle.stationExt = GetRadioExtStation()
 end
 
-function OnVehicleEntered()
-
+function MountedVehicle()
     despawnSameVehicle = false
     local tempBase = GetVehicleBase()
-    local tempVeh = IsInVehicleListRecord(tempBase:GetRecordID())
+    local tempVeh = GetVehicleInListFromRecord(tempBase:GetRecordID())
 
     if tempVeh ~= nil and IsInVehicleList(tempVeh) then
         Vehicle = tempVeh
@@ -242,28 +259,43 @@ function OnVehicleEntered()
         Vehicle.base = tempBase
     end
 
+    -- Check for Save Data
+    local checkExt = Vehicle.saveExt ~= nil and Vehicle.saveExt ~= -1
+    if Vehicle.savePlaying or checkExt then
+        if checkExt then
+            local radioExt = GetMod("radioExt")
+            if radioExt then
+                local radio = radioExt.radioManager:getRadioByIndex(Vehicle.saveExt)
+
+                if radio then
+                    radioExt.radioManager.managerV:switchToRadio(radio)
+                end
+            end
+        else
+            Vehicle.base:SetRadioReceiverStation(Vehicle.saveStation)
+            Vehicle.station = Vehicle.saveStation
+            Vehicle.playing = true
+        end
+
+        Vehicle.saveStation = nil
+        Vehicle.saveExt = nil
+        Vehicle.savePlaying = false
+    end
+
     SetVehicleRadioData()
+end
+
+-- Vehicle and Radio Behavior
+function OnVehicleEntered()
+    MountedVehicle()
     radioPortActive = GetPocketRadio():IsActive()
 end
 
 function OnVehicleExited()
     AddVehicle(Vehicle)
-    if Vehicle.playing then
-        Cron.Resume(spawnTimer)
-    end
-end
 
-function SpawnSetRadio()
-    if Vehicle.data.spawned then
-        if Vehicle.stationExt then
-            Vehicle.data.SetRadio(Vehicle.stationExt, true, Vehicle.data)
-        else
-            Vehicle.data.SetRadio(Vehicle.station, Vehicle.playing, Vehicle.data)
-        end
-        Vehicle.data.ready = true
-        Cron.Pause(spawnTimer)
-    else
-        Vehicle.data.SpawnRadios(Vehicle.base:GetWorldTransform(), Vehicle.data)
+    if Vehicle.playing then
+        Vehicle.StartTimer()
     end
 end
 
@@ -276,29 +308,64 @@ function Update()
         pocketUnmount = false
     end
 
-    if Vehicle.data.ready then
+    -- Handles loading game when mounted on a vehicle
+    if Vehicle == nil and GetVehicleBase() ~= nil then
+        MountedVehicle()
+    elseif Vehicle ~= nil and Vehicle.audio.ready and Vehicle.despawn then
+        Vehicle.audio.DespawnRadio()
+        Vehicle.despawn = false
+    end
+
+    if Vehicle ~= nil and Vehicle.audio.ready then
         -- moves speaker with vehicle until it comes to a full stop
         for i,v in ipairs(VehicleList.list) do
             local pos = v.base:GetWorldTransform().Position
             if not VectorCompare(pos, v.lastLoc) then
-                v.data.TeleportRadio(pos, rot, v.data)
+                v.audio.TeleportRadio(pos, rot)
                 v.lastLoc = pos
             end
         end
 
         if despawnSameVehicle then
             -- starts Despawn delay after entering vehicle
-            if Vehicle.entering and not IsEnteringVehicle() then
+            if entering and not IsEnteringVehicle() then
                 delayCounter = 1
             end
             if delayCounter == despawnDelay then
                 delayCounter = 0
-                Vehicle.data.DespawnRadio(Vehicle.data)
+                Vehicle.audio.DespawnRadio()
                 despawnSameVehicle = false
             elseif delayCounter > 0 then
                 delayCounter = delayCounter + 1
             end
-            Vehicle.entering = IsEnteringVehicle()
+            entering = IsEnteringVehicle()
+        end
+    end
+end
+
+-- Save Functionality
+function CreateSave(veh)
+    local vehicle = GetVehicleInListFromRecord(veh:GetVehicle():GetRecordID())
+
+    if vehicle ~= nil then
+        vehicle.despawn = true
+        vehicle.saveStation = vehicle.station
+        vehicle.saveExt = vehicle.stationExt
+        vehicle.savePlaying = vehicle.playing
+        vehicle.audio.DespawnRadio()
+    end
+end
+
+function LoadSave(veh)
+    local vehicle = GetVehicleInListFromRecord(veh:GetVehicle():GetRecordID())
+    if vehicle ~= nil then
+        vehicle.base = veh:GetVehicle()
+
+        Save.playing = vehicle.playing
+        Save.stationExt = vehicle.stationExt
+
+        if vehicle.playing then
+            vehicle.StartTimer()
         end
     end
 end
@@ -348,6 +415,10 @@ function LoudVehicleRadio:New()
         Observe('VehicleComponent', 'OnGameDetach', function(veh)
             CreateSave(veh)
         end)
+        
+        Observe('VehicleComponent', 'OnGameAttach', function(veh)
+            LoadSave(veh)
+        end)
 
         Observe('VehicleComponent', 'OnSummonStartedEvent', function(veh)
             LoadSave(veh)
@@ -357,14 +428,15 @@ function LoudVehicleRadio:New()
             if evt == nil then
 				evt = _
 			end
+            if Vehicle ~= nil then
+                Vehicle.station = evt.station
+                Vehicle.playing = evt.toggle;
 
-            Vehicle.station = evt.station
-            Vehicle.playing = evt.toggle;
-
-            if (not evt.toggle and evt.station == -1) then
-                Vehicle.stationExt = GetRadioExtStation()
-                if Vehicle.stationExt ~= nil then
-                    Vehicle.playing = true;
+                if (not evt.toggle and evt.station == -1) then
+                    Vehicle.stationExt = GetRadioExtStation()
+                    if Vehicle.stationExt ~= nil then
+                        Vehicle.playing = true;
+                    end
                 end
             end
         end)
@@ -386,7 +458,6 @@ function LoudVehicleRadio:New()
         end)
 
         Observe('PocketRadio', 'HandleVehicleUnmounted', function()
-            Cron.Resume(updateTimer)
             pocketUnmount = true
         end)
     end)
@@ -399,11 +470,7 @@ function LoudVehicleRadio:New()
         Cleanup()
     end)
 
-    spawnTimer = Cron.Every(.1, SpawnSetRadio)
-    Cron.Pause(spawnTimer)
-
     updateTimer = Cron.Every(.1, Update)
-    Cron.Pause(updateTimer)
 
     return {
       version = LoudVehicleRadio.version

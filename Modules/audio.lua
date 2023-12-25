@@ -2,7 +2,6 @@ local Audio = {}
 
 function Audio.audio()
     local self = {
-        active = false,
         spawned = false,
         ready = false,
         radios = {},
@@ -89,7 +88,6 @@ function Audio.audio()
         self.radios = {}
         self.spawned = false
         self.ready = false
-        self.active = false
     end
 
     function self.TeleportRadio(position, rotation)
