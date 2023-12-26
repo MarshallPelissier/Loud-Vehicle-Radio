@@ -22,6 +22,7 @@ local despawnSameVehicle = false
 local delayCounter = 0
 local despawnDelay = 7
 local entering = false
+local mountedCheck = false
 
 
 VehicleStationList = {
@@ -211,12 +212,11 @@ function SetVehicleRadioData()
     end
     Vehicle.station = GetVehicleStation()
     Vehicle.stationExt = GetRadioExtStation()
-
-    print("Vehicle Playing: ", Vehicle.playing)
 end
 
 -- Vehicle and Radio Behavior
 function OnVehicleEntered()
+    mountedCheck = false
     MountedVehicle()
     radioPortActive = GetPocketRadio():IsActive()
 end
@@ -224,6 +224,10 @@ end
 function OnVehicleExited()
     if IsPlayerDriver() then
         AddVehicle(Vehicle)
+
+        if not Vehicle.playing then
+            Vehicle.playing = GetVehiclePlaying()
+        end
 
         if Vehicle.playing then
             Vehicle.StartTimer()
@@ -279,20 +283,19 @@ function Update()
         pocketUnmount = false
     end
 
-    -- Handles loading game when mounted on a vehicle
     if Vehicle == nil and GetVehicleBase() ~= nil then
         MountedVehicle()
-    elseif Vehicle ~= nil and Vehicle.audio.ready and Vehicle.despawn then
-        Vehicle.audio.DespawnRadio()
-        Vehicle.despawn = false
+        mountedCheck = false
     end
 
     -- moves speaker with vehicle until it comes to a full stop
     for i,v in ipairs(VehicleList.list) do
-        local pos = v.base:GetWorldTransform().Position
-        if v.audio.ready and not VectorCompare(pos, v.lastLoc) then
-            v.audio.TeleportRadio(pos, rot)
-            v.lastLoc = pos
+        if v.audio.ready then
+            local pos = v.base:GetWorldTransform().Position
+            if not VectorCompare(pos, v.lastLoc) then
+                v.audio.TeleportRadio(pos, rot)
+                v.lastLoc = pos
+            end
         end
     end
 
@@ -317,6 +320,7 @@ function Cleanup()
     for i,v in ipairs(VehicleList.list) do
         v.audio.DespawnRadio()
     end
+    mountedCheck = true
     Vehicle = nil
     pocketUnmount = false
     radioPortActive = false
@@ -328,7 +332,7 @@ function CreateSave(veh)
     local vehicle = GetVehicleInListFromRecord(veh:GetVehicle():GetRecordID())
 
     if vehicle ~= nil then
-        vehicle.despawn = true
+        --vehicle.despawn = true
         vehicle.saveStation = vehicle.station
         vehicle.saveExt = vehicle.stationExt
         vehicle.savePlaying = vehicle.playing
@@ -344,7 +348,7 @@ function LoadSave(veh)
         Save.playing = vehicle.playing
         Save.stationExt = vehicle.stationExt
 
-        if vehicle.playing then
+        if vehicle.playing and not mountedCheck then
             vehicle.StartTimer()
         end
     end
