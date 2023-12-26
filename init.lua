@@ -97,7 +97,6 @@ VehicleList = {
     list = {},
 }
 
---Vehicle List
 function AddVehicle(veh)
     if veh ~= nil   then
         local v = GetVehicleInListFromRecord(veh.record)
@@ -123,29 +122,6 @@ function GetVehicleInListFromRecord(record)
     return GetItemInListFromRecord(VehicleList.list, record)
 end
 
---Save List
-function AddSave(save)
-    if save ~= nil and not IsInSaveList(save) then
-        AddList(SaveList.list, save)
-        SaveList.count = SaveList.count + 1
-    end
-end
-
-function RemoveSave(save)
-    if save ~= nil and IsInSaveList(save) then
-        RemoveList(SaveList.list, save)
-        SaveList.count = SaveList.count - 1
-    end
-end
-
-function IsInSaveList(save)
-    return GetItemInListFromRecord(save.record) ~= nil
-end
-
-function GetSaveInListFromRecord(record)
-    return GetItemInListFromRecord(SaveList.list, record)
-end
-
 -- List functions
 function AddList(list, item)
     table.insert(list, item)
@@ -163,18 +139,6 @@ function GetItemInListFromRecord(list, record)
     end
 
     return nil
-end
-
-
-function Cleanup()
-    for i,v in ipairs(VehicleList.list) do
-        v.audio.DespawnRadio()
-    end
-    Vehicle = nil
-    pocketUnmount = false
-    radioPortActive = false
-    despawnSameVehicle = false
-    entering = false
 end
 
 -- Vehicle and Radio Data
@@ -242,8 +206,29 @@ end
 function SetVehicleRadioData()
     Vehicle.record = GetMountedVehicleRecord()
     Vehicle.playing = Vehicle.base:WasRadioReceiverPlaying()
+    if not Vehicle.playing then
+        Vehicle.playing = GetVehiclePlaying()
+    end
     Vehicle.station = GetVehicleStation()
     Vehicle.stationExt = GetRadioExtStation()
+
+    print("Vehicle Playing: ", Vehicle.playing)
+end
+
+-- Vehicle and Radio Behavior
+function OnVehicleEntered()
+    MountedVehicle()
+    radioPortActive = GetPocketRadio():IsActive()
+end
+
+function OnVehicleExited()
+    if IsPlayerDriver() then
+        AddVehicle(Vehicle)
+
+        if Vehicle.playing then
+            Vehicle.StartTimer()
+        end
+    end
 end
 
 function MountedVehicle()
@@ -254,7 +239,7 @@ function MountedVehicle()
     if tempVeh ~= nil and IsInVehicleList(tempVeh) then
         Vehicle = tempVeh
         despawnSameVehicle = true
-    elseif Vehicle == nil or Vehicle.base == nil or Vehicle.record ~= tempBase:GetRecordID() then
+    else
         Vehicle = vehicle()
         Vehicle.base = tempBase
     end
@@ -285,20 +270,6 @@ function MountedVehicle()
     SetVehicleRadioData()
 end
 
--- Vehicle and Radio Behavior
-function OnVehicleEntered()
-    MountedVehicle()
-    radioPortActive = GetPocketRadio():IsActive()
-end
-
-function OnVehicleExited()
-    AddVehicle(Vehicle)
-
-    if Vehicle.playing then
-        Vehicle.StartTimer()
-    end
-end
-
 function Update()
     if pocketUnmount then
         if (not radioPortActive or disableRadioPort) and GetPocketRadio():IsActive() then
@@ -316,34 +287,43 @@ function Update()
         Vehicle.despawn = false
     end
 
-    if Vehicle ~= nil and Vehicle.audio.ready then
-        -- moves speaker with vehicle until it comes to a full stop
-        for i,v in ipairs(VehicleList.list) do
-            local pos = v.base:GetWorldTransform().Position
-            if not VectorCompare(pos, v.lastLoc) then
-                v.audio.TeleportRadio(pos, rot)
-                v.lastLoc = pos
-            end
+    -- moves speaker with vehicle until it comes to a full stop
+    for i,v in ipairs(VehicleList.list) do
+        local pos = v.base:GetWorldTransform().Position
+        if v.audio.ready and not VectorCompare(pos, v.lastLoc) then
+            v.audio.TeleportRadio(pos, rot)
+            v.lastLoc = pos
         end
+    end
 
-        if despawnSameVehicle then
-            -- starts Despawn delay after entering vehicle
-            if entering and not IsEnteringVehicle() then
-                delayCounter = 1
-            end
-            if delayCounter == despawnDelay then
-                delayCounter = 0
-                Vehicle.audio.DespawnRadio()
-                despawnSameVehicle = false
-            elseif delayCounter > 0 then
-                delayCounter = delayCounter + 1
-            end
-            entering = IsEnteringVehicle()
+    if Vehicle ~= nil and Vehicle.audio.ready and despawnSameVehicle then
+        -- starts Despawn delay after entering vehicle
+        if entering and not IsEnteringVehicle() then
+            delayCounter = 1
         end
+        if delayCounter == despawnDelay then
+            delayCounter = 0
+            Vehicle.audio.DespawnRadio()
+            despawnSameVehicle = false
+        elseif delayCounter > 0 then
+            delayCounter = delayCounter + 1
+        end
+        entering = IsEnteringVehicle()
     end
 end
 
 -- Save Functionality
+function Cleanup()
+    for i,v in ipairs(VehicleList.list) do
+        v.audio.DespawnRadio()
+    end
+    Vehicle = nil
+    pocketUnmount = false
+    radioPortActive = false
+    despawnSameVehicle = false
+    entering = false
+end
+
 function CreateSave(veh)
     local vehicle = GetVehicleInListFromRecord(veh:GetVehicle():GetRecordID())
 
@@ -415,7 +395,7 @@ function LoudVehicleRadio:New()
         Observe('VehicleComponent', 'OnGameDetach', function(veh)
             CreateSave(veh)
         end)
-        
+
         Observe('VehicleComponent', 'OnGameAttach', function(veh)
             LoadSave(veh)
         end)
