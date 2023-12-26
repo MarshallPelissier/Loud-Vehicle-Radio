@@ -17,6 +17,7 @@ function RadioToggleEvent.new() return end
 local updateTimer = nil
 local rot = nil
 local pocketUnmount = false
+local pocketInput = false
 local radioPortActive = false
 local despawnSameVehicle = false
 local delayCounter = 0
@@ -276,11 +277,16 @@ end
 
 function Update()
     if pocketUnmount then
+        print("Pocket Unmount loop")
         if (not radioPortActive or disableRadioPort) and GetPocketRadio():IsActive() then
             local evt = RadioToggleEvent.new()
             GetPocketRadio():HandleRadioToggleEvent(evt)
+            pocketUnmount = false
+            print("Pocket Turn Off")
+        else
+            print("Pocket reset")
+            pocketUnmount = false
         end
-        pocketUnmount = false
     end
 
     if Vehicle == nil and GetVehicleBase() ~= nil then
@@ -388,24 +394,13 @@ function LoudVehicleRadio:New()
 
         rot = EulerAngles.new(0,90,0)
 
+        -- Vehicle/Radio Observers
         Observe('hudCarController', 'OnMountingEvent', function()
             OnVehicleEntered()
         end)
 
         Observe('VehicleComponentPS', 'OnVehicleStartedUnmountingEvent', function()
             OnVehicleExited()
-        end)
-
-        Observe('VehicleComponent', 'OnGameDetach', function(veh)
-            CreateSave(veh)
-        end)
-
-        Observe('VehicleComponent', 'OnGameAttach', function(veh)
-            LoadSave(veh)
-        end)
-
-        Observe('VehicleComponent', 'OnSummonStartedEvent', function(veh)
-            LoadSave(veh)
         end)
 
         Observe('VehicleComponent', 'OnVehicleRadioEvent', function(_, evt)
@@ -433,6 +428,19 @@ function LoudVehicleRadio:New()
             end
         end)
 
+        -- Save and Load Observers
+        Observe('VehicleComponent', 'OnGameDetach', function(veh)
+            CreateSave(veh)
+        end)
+
+        Observe('VehicleComponent', 'OnGameAttach', function(veh)
+            LoadSave(veh)
+        end)
+
+        Observe('VehicleComponent', 'OnSummonStartedEvent', function(veh)
+            LoadSave(veh)
+        end)
+
         Observe('LoadGameMenuGameController', 'OnUninitialize', function()
             Cleanup()
         end)
@@ -441,8 +449,31 @@ function LoudVehicleRadio:New()
             Cleanup()
         end)
 
-        Observe('PocketRadio', 'HandleVehicleUnmounted', function()
+        -- Pocket Radio Observers
+        Observe('PocketRadio', 'HandleVehicleUnmounted', function(_)
+            print("Pocket Unmount Event: ", _:IsRestricted())
             pocketUnmount = true
+        end)
+
+        Observe('PocketRadio', 'HandleRestrictionStateChanged', function(_)
+            print("RESTRICTION STATE: ", _:IsRestricted())
+            if not _:IsRestricted() then
+                print("Restricted unmount")
+                pocketUnmount = true
+            end
+        end)
+
+        Observe('PocketRadio', 'HandleRadioToggleEvent', function(_)
+            print("-- POCKET RADIO TOGGLE EVENT: ", _:IsActive())
+            if not pocketInput and _:IsActive() then
+                print("Pocket Turn Off")
+                pocketUnmount = true
+            end
+            pocketInput = false
+        end)
+
+        Observe('PocketRadio', 'HandleInputAction', function()
+            pocketInput = true
         end)
     end)
 
