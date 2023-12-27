@@ -1,4 +1,4 @@
-local LoudVehicleRadio = { version = "1.0.0" }
+local LoudVehicleRadio = { version = "1.3.0" }
 local Cron = require("Modules/Cron")
 local Audio = require("Modules/audio")
 
@@ -14,7 +14,6 @@ RadioToggleEvent = {}
 ---@return RadioToggleEvent
 function RadioToggleEvent.new() return end
 
-local updateTimer = nil
 local rot = nil
 local pocketUnmount = false
 local pocketInput = false
@@ -61,7 +60,6 @@ function vehicle()
         saveStation = nil,
         saveExt = nil,
         savePlaying = false,
-        despawn = false,
         timer = nil,
         audio = Audio.audio(),
     }
@@ -276,15 +274,13 @@ function MountedVehicle()
 end
 
 function Update()
+    --Check for unwanted Pocket Radio activation
     if pocketUnmount then
-        print("Pocket Unmount loop")
         if (not radioPortActive or disableRadioPort) and GetPocketRadio():IsActive() then
             local evt = RadioToggleEvent.new()
             GetPocketRadio():HandleRadioToggleEvent(evt)
             pocketUnmount = false
-            print("Pocket Turn Off")
         else
-            print("Pocket reset")
             pocketUnmount = false
         end
     end
@@ -338,7 +334,6 @@ function CreateSave(veh)
     local vehicle = GetVehicleInListFromRecord(veh:GetVehicle():GetRecordID())
 
     if vehicle ~= nil then
-        --vehicle.despawn = true
         vehicle.saveStation = vehicle.station
         vehicle.saveExt = vehicle.stationExt
         vehicle.savePlaying = vehicle.playing
@@ -450,23 +445,18 @@ function LoudVehicleRadio:New()
         end)
 
         -- Pocket Radio Observers
-        Observe('PocketRadio', 'HandleVehicleUnmounted', function(_)
-            print("Pocket Unmount Event: ", _:IsRestricted())
+        Observe('PocketRadio', 'HandleVehicleUnmounted', function()
             pocketUnmount = true
         end)
 
         Observe('PocketRadio', 'HandleRestrictionStateChanged', function(_)
-            print("RESTRICTION STATE: ", _:IsRestricted())
             if not _:IsRestricted() then
-                print("Restricted unmount")
                 pocketUnmount = true
             end
         end)
 
         Observe('PocketRadio', 'HandleRadioToggleEvent', function(_)
-            print("-- POCKET RADIO TOGGLE EVENT: ", _:IsActive())
             if not pocketInput and _:IsActive() then
-                print("Pocket Turn Off")
                 pocketUnmount = true
             end
             pocketInput = false
@@ -485,7 +475,7 @@ function LoudVehicleRadio:New()
         Cleanup()
     end)
 
-    updateTimer = Cron.Every(.1, Update)
+    Cron.Every(.1, Update)
 
     return {
       version = LoudVehicleRadio.version
