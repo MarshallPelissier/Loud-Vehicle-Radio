@@ -1,4 +1,4 @@
-local LoudVehicleRadio = { version = "1.3.0" }
+local LoudVehicleRadio = { version = "1.3.1" }
 local Cron = require("Modules/Cron")
 local Audio = require("Modules/audio")
 
@@ -16,7 +16,6 @@ function RadioToggleEvent.new() return end
 
 local rot = nil
 local pocketUnmount = false
-local pocketInput = false
 local radioPortActive = false
 local despawnSameVehicle = false
 local delayCounter = 0
@@ -276,10 +275,14 @@ end
 function Update()
     --Check for unwanted Pocket Radio activation
     if pocketUnmount then
-        if (not radioPortActive or disableRadioPort) and GetPocketRadio():IsActive() then
-            local evt = RadioToggleEvent.new()
-            GetPocketRadio():HandleRadioToggleEvent(evt)
-            pocketUnmount = false
+        if not radioPortActive or disableRadioPort then
+            if not GetPocketRadio():IsRestricted() then
+                if GetPocketRadio():IsActive() then
+                    local evt = RadioToggleEvent.new()
+                    GetPocketRadio():HandleRadioToggleEvent(evt)
+                end
+                pocketUnmount = false
+            end
         else
             pocketUnmount = false
         end
@@ -444,26 +447,9 @@ function LoudVehicleRadio:New()
             Cleanup()
         end)
 
-        -- Pocket Radio Observers
+        -- Pocket Radio Observer
         Observe('PocketRadio', 'HandleVehicleUnmounted', function()
             pocketUnmount = true
-        end)
-
-        Observe('PocketRadio', 'HandleRestrictionStateChanged', function(_)
-            if not _:IsRestricted() then
-                pocketUnmount = true
-            end
-        end)
-
-        Observe('PocketRadio', 'HandleRadioToggleEvent', function(_)
-            if not pocketInput and _:IsActive() then
-                pocketUnmount = true
-            end
-            pocketInput = false
-        end)
-
-        Observe('PocketRadio', 'HandleInputAction', function()
-            pocketInput = true
         end)
     end)
 
