@@ -1,4 +1,4 @@
-local LoudVehicleRadio = { version = "1.3.1" }
+local LoudVehicleRadio = { version = "1.3.2" }
 local Cron = require("Modules/Cron")
 local Audio = require("Modules/audio")
 
