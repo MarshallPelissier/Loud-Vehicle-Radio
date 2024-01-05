@@ -8,6 +8,7 @@ function Audio.audio()
     }
 
     local volume = 3
+    local volumeExt = 1
 
     local radio = {
         path = "base\\quest\\main_quests\\prologue\\q000\\entities\\q000_invisible_radio.ent",
@@ -63,10 +64,16 @@ function Audio.audio()
         end
     end
 
-    function self.SpawnRadios(transform)
+    function self.SpawnRadios(transform, ext)
         self.ready = false
         self.spawned = true
-        for i = 1, volume, 1 do
+        local vol = 0
+        if ext then
+            vol = volumeExt
+        else
+            vol = volume
+        end
+        for i = 1, vol, 1 do
             self.SpawnRadio(transform)
         end
     end
